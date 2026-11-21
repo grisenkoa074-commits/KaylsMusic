@@ -269,6 +269,7 @@ async function sendLicensedAudio(request,env) {
   const declared=Number(upstream.headers.get("content-length")||0);
   if(declared>50*1024*1024)return json({error:"Файл больше лимита Telegram 50 МБ."},413);
   if(type.includes("text/html")||type.includes("application/json"))return json({error:"Источник вернул не аудиофайл."},415);
+  if(type && !(type.includes("audio/mpeg")||type.includes("audio/mp3")||type.includes("application/octet-stream")))return json({error:"Источник не предоставил MP3-файл."},415);
   const bytes=await upstream.arrayBuffer();
   if(bytes.byteLength>50*1024*1024)return json({error:"Файл больше лимита Telegram 50 МБ."},413);
   if(bytes.byteLength<1024)return json({error:"Аудиофайл пустой или повреждён."},415);
