@@ -36,8 +36,19 @@ async function search(q,target){
 }
 $("openSearch").onclick=()=>{$("searchPanel").hidden=false;$("query").focus();$("searchPanel").scrollIntoView({behavior:"smooth",block:"start"})};
 $("closeSearch").onclick=()=>{$("searchPanel").hidden=true;$("query").value="";$("homeResults").innerHTML='<div class="hint">Введи название трека или исполнителя.</div>'};
-$("query").oninput=e=>{if(e.target.value.trim().length>=2)search(e.target.value,$("homeResults"))};
-$("query").onkeydown=e=>{if(e.key==="Enter")search(e.target.value,$("homeResults"))};
+let searchDebounce=null,searchSequence=0;
+function liveSearch(value,target){
+ clearTimeout(searchDebounce);
+ const q=value.trim();
+ if(q.length<2){target.innerHTML='<div class="hint">Введи хотя бы 2 символа для поиска.</div>';return;}
+ const seq=++searchSequence;
+ searchDebounce=setTimeout(async()=>{if(seq!==searchSequence)return;target.innerHTML='<div class="hint">Ищем «'+esc(q)+'»…</div>';await search(q,target);},280);
+}
+$("query").oninput=e=>liveSearch(e.target.value,$("homeResults"));
+$("query").onkeydown=e=>{if(e.key==="Enter"){clearTimeout(searchDebounce);searchSequence++;search(e.target.value,$("homeResults"));}};
+const query2=$("query2");
+if(query2){query2.oninput=e=>liveSearch(e.target.value,$("searchResults"));query2.onkeydown=e=>{if(e.key==="Enter"){clearTimeout(searchDebounce);searchSequence++;search(e.target.value,$("searchResults"));}};}
+$("searchButton2").onclick=()=>{clearTimeout(searchDebounce);searchSequence++;search(query2?.value||"",$("searchResults"));};
 async function play(t,list){if(!t.stream){tg?.showAlert?.("Для этого трека нет доступного предпрослушивания.");return}queue=list||queue;qi=queue.findIndex(x=>key(x)===key(t));current=t;$("playerTitle").textContent=t.title;$("playerArtist").textContent=t.artist;$("playerArt").src=t.artwork||"";$("fpArt").src=t.artwork||"";$("fpTitle").textContent=t.title;$("fpArtist").textContent=t.artist;$("fpContext").textContent="Твоя музыка";$("playerHeart").textContent=has(t)?"♥":"♡";$("fpLike").textContent=has(t)?"♥":"♡";$("player").hidden=false;audio.src=t.stream;try{await audio.play();setPlaying(true)}catch{setPlaying(false)}history=[t,...history.filter(x=>key(x)!==key(t))].slice(0,100);persist();renderRecent();renderQueue()}
 function setPlaying(on){$("playPause").textContent=on?"Ⅱ":"▶";$("fpPlay").textContent=on?"Ⅱ":"▶"}
 function openFullPlayer(){$("fullPlayer").hidden=false;document.body.classList.add("player-open");$("fpLike").textContent=current&&has(current)?"♥":"♡";renderQueue()}
