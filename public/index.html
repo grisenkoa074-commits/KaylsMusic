@@ -1,23 +1,12 @@
 <!doctype html>
-<html lang="ru">
-<head>
-<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
-<meta name="theme-color" content="#10091f"><title>KaylsMusic</title>
-<link rel="stylesheet" href="/style.css">
-<script src="https://telegram.org/js/telegram-web-app.js"></script>
-</head>
-<body>
-<div class="glow glow-a"></div><div class="glow glow-b"></div>
-<main class="shell">
-<header class="top"><div class="brand"><div class="brand-icon">♫</div><div><b>KaylsMusic</b><small>твой звук · твой ритм</small></div></div><button id="adminOpen" class="icon-btn" aria-label="Админ-панель" hidden>⚙</button></header>
-<section class="hero"><div class="eyebrow">MUSIC DISCOVERY</div><h1>Найди свой<br><span>новый звук</span></h1><p>Ищи сразу в нескольких музыкальных каталогах.</p></section>
-<form id="searchForm" class="search"><span>⌕</span><input id="query" autocomplete="off" placeholder="Трек или исполнитель..." minlength="2"><button type="submit">Найти</button></form>
-<div class="filters"><span class="filter active">Все каталоги</span><span class="filter">Audius</span><span class="filter">Jamendo</span><span class="filter">Deezer</span><span class="filter">iTunes</span></div>
-<section class="results-head"><div><h2>Результаты</h2><p id="status">Начни с поиска любимого трека</p></div><span class="count" id="count"></span></section>
-<section id="results" class="results"><div class="empty"><div class="empty-note">♫</div><b>Музыка начинается здесь</b><span>Введи название песни или имя артиста</span></div></section>
-<section id="adminPanel" class="admin-panel" hidden><div class="admin-title"><div><span class="eyebrow">OWNER AREA</span><h2>Панель владельца</h2></div><button id="adminClose" class="icon-btn">✕</button></div><div id="adminData" class="admin-grid"></div><p class="admin-note">Панель доступна только владельцу бота.</p></section>
-<footer>KaylsMusic <span>•</span> Музыка объединяет</footer>
-</main>
-<div class="player" id="player" hidden><img id="playerArt" src="" alt=""><div class="player-meta"><b id="playerTitle">—</b><span id="playerArtist">—</span></div><button id="playPause" class="play-btn">Ⅱ</button><audio id="audio" preload="none"></audio></div>
-<script src="/app.js"></script>
-</body></html>
+<html lang="ru"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no"><meta name="theme-color" content="#101014"><meta name="description" content="KaylsMusic — музыка, плейлисты и персональные рекомендации."><title>KaylsMusic</title><link rel="stylesheet" href="/style.css"><script src="https://telegram.org/js/telegram-web-app.js"></script></head>
+<body><div class="ambient ambient-one"></div><div class="ambient ambient-two"></div><main class="shell">
+<header class="top"><a class="brand" href="/" aria-label="KaylsMusic"><span class="brand-icon">K</span><span><b>KaylsMusic</b><small>музыка рядом</small></span></a><button id="adminOpen" class="icon-btn" aria-label="Панель владельца" hidden>⚙</button></header>
+<section class="hero"><div class="eyebrow">ТВОЯ МУЗЫКА. ТВОЁ НАСТРОЕНИЕ.</div><h1>Слушай то,<br><span>что чувствуешь.</span></h1><p>Находи любимые треки и открывай новые.</p></section>
+<nav class="tabs" aria-label="Разделы приложения"><button class="tab active" data-tab="search">⌕ <span>Поиск</span></button><button class="tab" data-tab="playlist">♫ <span>Плейлист</span><i id="playlistCount">0</i></button><button class="tab" data-tab="wave">✦ <span>Моя волна</span></button></nav>
+<section id="searchView" class="view"><form id="searchForm" class="search"><span>⌕</span><input id="query" autocomplete="off" placeholder="Трек, альбом или исполнитель..." minlength="2"><button type="submit">Найти</button></form><div class="filters"><span class="filter active">Все каталоги</span><span class="filter">Audius</span><span class="filter">Jamendo</span><span class="filter">Deezer</span><span class="filter">iTunes</span></div><section class="results-head"><div><h2>Результаты поиска</h2><p id="status">Начни с любимого исполнителя</p></div><span class="count" id="count"></span></section><section id="results" class="results"><div class="empty"><div class="empty-note">♫</div><b>Музыка начинается здесь</b><span>Введи название песни или имя артиста</span></div></section></section>
+<section id="playlistView" class="view" hidden><div class="section-intro"><div class="eyebrow">ТВОЯ КОЛЛЕКЦИЯ</div><h2>Мой плейлист</h2><p>Сохраняй треки, к которым хочется возвращаться.</p></div><section id="playlistResults" class="results"><div class="empty"><div class="empty-note">♫</div><b>Плейлист пока пуст</b><span>Добавляй треки кнопкой ＋ в поиске</span></div></section></section>
+<section id="waveView" class="view" hidden><div class="wave-banner"><div class="eyebrow">ПЕРСОНАЛЬНЫЙ ПОТОК</div><h2>Моя волна <span>✦</span></h2><p>Музыка на основе твоих сохранённых и прослушанных треков.</p><button id="refreshWave" class="wave-refresh">Обновить подборку ↻</button></div><section class="results-head"><div><h2>Тебе может понравиться</h2><p id="waveStatus">Подбираем музыку для тебя</p></div></section><section id="waveResults" class="results"><div class="empty"><div class="empty-note">✦</div><b>Настроим твою волну</b><span>Добавь несколько треков в плейлист или послушай музыку</span></div></section></section>
+<section id="adminPanel" class="admin-panel" hidden><div class="admin-title"><div><span class="eyebrow">OWNER ONLY</span><h2>Панель владельца</h2></div><button id="adminClose" class="icon-btn">✕</button></div><div id="adminData" class="admin-grid"></div><p class="admin-note">Закрытый раздел. Доступ подтверждается сервером через Telegram.</p></section>
+<footer>KaylsMusic <span>•</span> твой звук, твои правила</footer></main>
+<div class="player" id="player" hidden><img id="playerArt" src="" alt=""><div class="player-meta"><b id="playerTitle">—</b><span id="playerArtist">—</span></div><button id="playPause" class="play-btn" aria-label="Пауза">Ⅱ</button><audio id="audio" preload="none"></audio></div><script src="/app.js"></script></body></html>
