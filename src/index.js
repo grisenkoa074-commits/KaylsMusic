@@ -2,7 +2,7 @@ const ADMIN_ID = "8179633402";
 const TELEGRAM_API = "https://api.telegram.org";
 const AUDIUS_API = "https://discoveryprovider.audius.co/v1";
 const APP_NAME = "KaylsMusic";
-const MAX_RESULTS = 8;
+const MAX_RESULTS = 8;\nconst WAVE_LIMIT = 60;
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
@@ -114,6 +114,37 @@ async function searchAll(query, env) {
   });
   return { tracks: unique.slice(0, 28), sources };
 }
+async function buildWave(request, env) {
+  let seeds=[];
+  try { seeds=JSON.parse(new URL(request.url).searchParams.get("seeds")||"[]"); } catch {}
+  if (!Array.isArray(seeds) || !seeds.length) return json({tracks:[]});
+  seeds=seeds.filter(s=>s&&typeof s.artist==="string"&&typeof s.title==="string").slice(0,12);
+  const artists=[...new Set(seeds.map(s=>s.artist.trim()).filter(a=>a&&a!=="Unknown artist"))].slice(0,5);
+  const queries=[...artists];
+  for(const s of seeds.slice(0,3)){
+    const q=[s.artist,s.title].filter(Boolean).join(" ").trim();
+    if(q.length>2&&!queries.some(x=>x.toLowerCase()===q.toLowerCase()))queries.push(q);
+  }
+  const batches=await Promise.allSettled(queries.slice(0,7).map(q=>searchAll(q,env)));
+  const candidates=[];
+  for(const batch of batches)if(batch.status==="fulfilled")candidates.push(...(batch.value.tracks||[]));
+  const seedKeys=new Set(seeds.map(s=>(s.source||"")+"|"+String(s.id||"")));
+  const seedArtists=new Map();
+  for(const s of seeds){const k=(s.artist||"").toLowerCase();if(k)seedArtists.set(k,(seedArtists.get(k)||0)+1);}
+  const seen=new Set();
+  const tracks=candidates.filter(t=>{
+    if(!t.stream)return false;
+    const k=(t.source||"")+"|"+String(t.id||"");
+    if(seedKeys.has(k)||seen.has(k))return false;
+    seen.add(k);return true;
+  }).map(t=>{
+    const artist=(t.artist||"").toLowerCase();
+    const exact=seedArtists.has(artist);
+    const related=artists.some(a=>artist.includes(a.toLowerCase())||a.toLowerCase().includes(artist));
+    return {...t,_rank:(exact?100:0)+(related?30:0)+(t.source==="Audius"?8:0)+Math.random()};
+  }).sort((a,b)=>b._rank-a._rank).slice(0,WAVE_LIMIT).map(({_rank,...t})=>t);
+  return json({tracks,seedCount:seeds.length,queryCount:queries.length});
+}
 async function verifyDownload(source, id, env) {
   if (source === "audius") {
     const u = `${AUDIUS_API}/tracks/${encodeURIComponent(id)}?app_name=${APP_NAME}`;
@@ -133,7 +164,7 @@ async function verifyDownload(source, id, env) {
   return null;
 }
 async function handleApi(request, env, url) {
-  if (request.method === "GET" && url.pathname === "/api/search") {
+  if (request.method === "GET" && url.pathname === "/api/wave") return buildWave(request, env);\n  if (request.method === "GET" && url.pathname === "/api/search") {
     const q = (url.searchParams.get("q") || "").trim().slice(0, 120);
     if (q.length < 2) return json({ tracks: [], sources: {} });
     try { return json(await searchAll(q, env)); }
