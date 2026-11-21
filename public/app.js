@@ -1,45 +1,40 @@
-const tg = window.Telegram?.WebApp;
-tg?.ready(); tg?.expand(); tg?.setHeaderColor?.("#10091f"); tg?.setBackgroundColor?.("#10091f");
-const initData = tg?.initData || "";
-const $ = id => document.getElementById(id);
-const form=$("searchForm"), query=$("query"), results=$("results"), status=$("status"), count=$("count");
-const audio=$("audio"), player=$("player");
-let currentTrack=null, lastTracks=[];
-function apiHeaders(){return {"x-telegram-init-data":initData};}
-function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));}
-function empty(title,sub){results.innerHTML=`<div class="empty"><div class="empty-note">♫</div><b>${esc(title)}</b><span>${esc(sub)}</span></div>`;}
-function renderTracks(tracks){
- lastTracks=tracks;count.textContent=tracks.length?`${tracks.length} треков`:"";
- if(!tracks.length){empty("Ничего не найдено","Попробуй другое название или исполнителя");return;}
- results.innerHTML=tracks.map((t,i)=>`<article class="track"><img class="cover" src="${esc(t.artwork||"")}" alt="" onerror="this.style.display='none'"><div class="track-info"><b>${esc(t.title)}</b><span>${esc(t.artist)} · ${esc(t.duration)}</span><span class="source">${esc(t.source)}</span></div><div class="track-actions"><button class="action primary" data-play="${i}" title="Слушать">▶</button><button class="action" data-share="${i}" title="Поделиться">↗</button><button class="action" data-download="${i}" title="Скачать" ${t.downloadable?"":"disabled"}>↓</button></div></article>`).join("");
- results.querySelectorAll("[data-play]").forEach(b=>b.onclick=()=>playTrack(tracks[Number(b.dataset.play)]));
- results.querySelectorAll("[data-share]").forEach(b=>b.onclick=()=>shareTrack(tracks[Number(b.dataset.share)]));
- results.querySelectorAll("[data-download]").forEach(b=>b.onclick=()=>downloadTrack(tracks[Number(b.dataset.download)]));
+const tg=window.Telegram?.WebApp;
+tg?.ready();tg?.expand();tg?.setHeaderColor?.("#101014");tg?.setBackgroundColor?.("#101014");
+const initData=tg?.initData||"", $=id=>document.getElementById(id);
+const form=$("searchForm"),query=$("query"),results=$("results"),status=$("status"),count=$("count"),audio=$("audio"),player=$("player");
+const STORE_KEY="kaylsmusic.collection.v1",HISTORY_KEY="kaylsmusic.history.v1";
+let currentTrack=null,lastTracks=[],playlist=load(STORE_KEY,[]),history=load(HISTORY_KEY,[]),waveTracks=[];
+function load(k,f){try{const v=JSON.parse(localStorage.getItem(k)||"null");return Array.isArray(v)?v:f}catch{return f}}
+function save(){try{localStorage.setItem(STORE_KEY,JSON.stringify(playlist));localStorage.setItem(HISTORY_KEY,JSON.stringify(history.slice(0,40)))}catch{} $("playlistCount").textContent=playlist.length||""}
+function apiHeaders(){return {"x-telegram-init-data":initData}}
+function esc(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+function trackKey(t){return String(t.source)+"|"+String(t.id)}
+function isSaved(t){return playlist.some(x=>trackKey(x)===trackKey(t))}
+function empty(target,title,sub){target.innerHTML='<div class="empty"><div class="empty-note">♫</div><b>'+esc(title)+'</b><span>'+esc(sub)+'</span></div>'}
+function renderTracks(target,tracks,mode){
+ if(!tracks.length){empty(target,mode==="playlist"?"Плейлист пока пуст":mode==="wave"?"Пока нет рекомендаций":"Ничего не найдено",mode==="playlist"?"Добавляй треки кнопкой ＋ в поиске":mode==="wave"?"Добавь треки в плейлист, чтобы настроить волну":"Попробуй другое название или исполнителя");return}
+ target.innerHTML=tracks.map((t,i)=>'<article class="track"><img class="cover" src="'+esc(t.artwork||"")+'" alt="" onerror="this.style.display=\'none\'"><div class="track-info"><b>'+esc(t.title)+'</b><span>'+esc(t.artist)+' · '+esc(t.duration||"")+'</span><span class="source">'+esc(t.source||"KaylsMusic")+'</span></div><div class="track-actions"><button class="action primary" data-play="'+i+'" title="Слушать">▶</button>'+(mode==="playlist"?'<button class="action remove" data-remove="'+i+'" title="Убрать">−</button>':'<button class="action '+(isSaved(t)?"saved":"")+'" data-add="'+i+'" title="В плейлист">'+(isSaved(t)?"♥":"＋")+'</button>')+'<button class="action" data-share="'+i+'" title="Поделиться">↗</button><button class="action" data-download="'+i+'" title="Скачать" '+(t.downloadable?"":"disabled")+'>↓</button></div></article>').join("");
+ target.querySelectorAll("[data-play]").forEach(b=>b.onclick=()=>playTrack(tracks[+b.dataset.play]));
+ target.querySelectorAll("[data-add]").forEach(b=>b.onclick=()=>addTrack(tracks[+b.dataset.add]));
+ target.querySelectorAll("[data-remove]").forEach(b=>b.onclick=()=>removeTrack(tracks[+b.dataset.remove]));
+ target.querySelectorAll("[data-share]").forEach(b=>b.onclick=()=>shareTrack(tracks[+b.dataset.share]));
+ target.querySelectorAll("[data-download]").forEach(b=>b.onclick=()=>downloadTrack(tracks[+b.dataset.download]));
 }
-async function search(q){
- status.textContent="Ищем в музыкальных каталогах…";count.textContent="";results.innerHTML='<div class="empty"><b>Ищем музыку…</b><span>Audius · Jamendo · Deezer · iTunes</span></div>';
- try{const r=await fetch("/api/search?q="+encodeURIComponent(q));const d=await r.json();if(!r.ok)throw new Error(d.error||"Search failed");renderTracks(d.tracks||[]);const ok=Object.entries(d.sources||{}).filter(([,v])=>v==="ok").map(([k])=>k);status.textContent=ok.length?"Источники: "+ok.join(" · "):"Каталоги временно недоступны";}
- catch(e){empty("Не удалось выполнить поиск","Попробуй ещё раз чуть позже");status.textContent=e.message;}
-}
-form.addEventListener("submit",e=>{e.preventDefault();const q=query.value.trim();if(q.length>=2)search(q);});
-async function playTrack(t){
- if(!t.stream){tg?.showAlert?.("У этого каталога нет доступного предпрослушивания.");return;}
- currentTrack=t;$("playerTitle").textContent=t.title;$("playerArtist").textContent=t.artist;$("playerArt").src=t.artwork||"";player.hidden=false;
- audio.src=t.source==="Audius"?t.stream:t.stream;
- try{await audio.play();$("playPause").textContent="Ⅱ";}catch{$("playPause").textContent="▶";tg?.showAlert?.("Нажми ▶ для начала прослушивания.");}
-}
-$("playPause").onclick=async()=>{if(audio.paused){try{await audio.play();$("playPause").textContent="Ⅱ";}catch{}}else{audio.pause();$("playPause").textContent="▶";}};
-audio.addEventListener("ended",()=>{$("playPause").textContent="▶";});
-function shareTrack(t){
- const text=`🎵 ${t.title} — ${t.artist}\nKaylsMusic · ${t.permalink}`;
- if(tg?.switchInlineQuery){tg.switchInlineQuery(text,["users","groups","channels"]);}
- else if(navigator.share){navigator.share({title:t.title,text}).catch(()=>{});}
- else if(navigator.clipboard){navigator.clipboard.writeText(text);tg?.showAlert?.("Ссылка скопирована.");}
-}
-function downloadTrack(t){
- if(!t.downloadable){tg?.showAlert?.("Скачивание для этого трека не разрешено автором.");return;}
- if(t.source==="Audius"||t.source==="Jamendo"){location.href="/api/download?source="+t.source.toLowerCase()+"&id="+encodeURIComponent(t.id);}
-}
-$("adminOpen").onclick=async()=>{const panel=$("adminPanel");panel.hidden=false;try{const r=await fetch("/api/admin",{headers:apiHeaders()});const d=await r.json();if(!r.ok)throw new Error(d.error||"Нет доступа");$("adminData").innerHTML=Object.entries(d.admin).map(([k,v])=>`<div class="admin-card"><b>${esc(k)}</b><span>${esc(v)}</span></div>`).join("");}catch(e){$("adminData").innerHTML=`<div class="admin-card"><b>Доступ закрыт</b><span>${esc(e.message)}</span></div>`;}};
-$("adminClose").onclick=()=>{$("adminPanel").hidden=true;};
-if(initData){fetch("/api/admin",{headers:apiHeaders()}).then(r=>{if(r.ok)$("adminOpen").hidden=false;}).catch(()=>{});}
+function addTrack(t){if(isSaved(t)){tg?.showAlert?.("Этот трек уже в плейлисте");return}playlist.unshift(t);save();if(!$("playlistView").hidden)renderTracks($("playlistResults"),playlist,"playlist");if(!$("waveView").hidden)buildWave();tg?.HapticFeedback?.impactOccurred?.("light")}
+function removeTrack(t){playlist=playlist.filter(x=>trackKey(x)!==trackKey(t));save();renderTracks($("playlistResults"),playlist,"playlist")}
+function switchTab(name){document.querySelectorAll(".tab").forEach(b=>b.classList.toggle("active",b.dataset.tab===name));["search","playlist","wave"].forEach(n=>$(n+"View").hidden=n!==name);$("adminPanel").hidden=true;if(name==="playlist")renderTracks($("playlistResults"),playlist,"playlist");if(name==="wave")buildWave()}
+document.querySelectorAll(".tab").forEach(b=>b.addEventListener("click",()=>switchTab(b.dataset.tab)));
+async function search(q){status.textContent="Ищем в музыкальных каталогах…";count.textContent="";results.innerHTML='<div class="empty"><b>Ищем музыку…</b><span>Audius · Jamendo · Deezer · iTunes</span></div>';try{const r=await fetch("/api/search?q="+encodeURIComponent(q)),d=await r.json();if(!r.ok)throw Error(d.error||"Search failed");lastTracks=d.tracks||[];renderTracks(results,lastTracks,"search");const ok=Object.entries(d.sources||{}).filter(x=>x[1]==="ok").map(x=>x[0]);status.textContent=ok.length?"Источники: "+ok.join(" · "):"Каталоги временно недоступны";count.textContent=lastTracks.length?lastTracks.length+" треков":""}catch(e){empty(results,"Не удалось выполнить поиск","Попробуй ещё раз чуть позже");status.textContent=e.message}}
+form.addEventListener("submit",e=>{e.preventDefault();const q=query.value.trim();if(q.length>=2)search(q)});
+async function playTrack(t){if(!t.stream){tg?.showAlert?.("У этого каталога нет доступного предпрослушивания.");return}currentTrack=t;$("playerTitle").textContent=t.title;$("playerArtist").textContent=t.artist;$("playerArt").src=t.artwork||"";player.hidden=false;audio.src=t.stream;try{await audio.play();$("playPause").textContent="Ⅱ"}catch{$("playPause").textContent="▶";tg?.showAlert?.("Нажми ▶ для начала прослушивания.")}history=[t,...history.filter(x=>trackKey(x)!==trackKey(t))].slice(0,40);save()}
+$("playPause").onclick=async()=>{if(audio.paused){try{await audio.play();$("playPause").textContent="Ⅱ"}catch{}}else{audio.pause();$("playPause").textContent="▶"}};
+audio.addEventListener("ended",()=>$("playPause").textContent="▶");
+function shareTrack(t){const payload={id:t.id,source:t.source,title:t.title,artist:t.artist,duration:t.duration,artwork:t.artwork,stream:t.stream,downloadable:!!t.downloadable,permalink:t.permalink};const url=new URL("/",location.origin);url.searchParams.set("track",JSON.stringify(payload));const message="🎵 "+t.title+" — "+t.artist+"\nСлушай в KaylsMusic: "+url.toString();if(tg?.switchInlineQuery)tg.switchInlineQuery(message,["users","groups","channels"]);else if(navigator.share)navigator.share({title:t.title,text:t.title+" — "+t.artist,url:url.toString()}).catch(()=>{});else if(navigator.clipboard)navigator.clipboard.writeText(message).then(()=>tg?.showAlert?.("Ссылка на трек скопирована."))}
+function downloadTrack(t){if(!t.downloadable){tg?.showAlert?.("Скачивание для этого трека не разрешено автором.");return}if(t.source==="Audius"||t.source==="Jamendo")location.href="/api/download?source="+t.source.toLowerCase()+"&id="+encodeURIComponent(t.id)}
+async function buildWave(){const target=$("waveResults");$("waveStatus").textContent="Подбираем музыку…";const seeds=[...playlist,...history].slice(0,5);if(!seeds.length){$("waveStatus").textContent="Добавь первые треки в коллекцию";empty(target,"Настроим твою волну","Добавь несколько треков в плейлист или послушай музыку");return}const seed=seeds[Math.floor(Math.random()*Math.min(seeds.length,3))],terms=[seed.artist,seed.title].filter(Boolean);const responses=await Promise.all(terms.map(q=>fetch("/api/search?q="+encodeURIComponent(q)).then(r=>r.json()).catch(()=>({tracks:[]}))));const seen=new Set([...playlist,...history].map(trackKey));waveTracks=responses.flatMap(x=>x.tracks||[]).filter(t=>{const k=trackKey(t);if(seen.has(k))return false;seen.add(k);return !!t.stream});for(let i=waveTracks.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[waveTracks[i],waveTracks[j]]=[waveTracks[j],waveTracks[i]]}waveTracks=waveTracks.slice(0,16);$("waveStatus").textContent=waveTracks.length?"Подборка по мотивам: "+seed.artist:"Не удалось найти похожие треки — попробуй позже";renderTracks(target,waveTracks,"wave")}
+$("refreshWave").onclick=buildWave;
+function openSharedTrack(){const raw=new URL(location.href).searchParams.get("track");if(!raw)return;try{const t=JSON.parse(raw);if(!t||!t.title||!t.artist||!t.source)return;renderTracks(results,[t],"search");status.textContent="Треком поделились в KaylsMusic";count.textContent="1 трек";query.value=t.title;switchTab("search")}catch{}}
+$("adminOpen").onclick=async()=>{const panel=$("adminPanel");panel.hidden=false;try{const r=await fetch("/api/admin",{headers:apiHeaders()}),d=await r.json();if(!r.ok)throw Error(d.error||"Нет доступа");$("adminData").innerHTML=Object.entries(d.admin).map(x=>'<div class="admin-card"><b>'+esc(x[0])+'</b><span>'+esc(x[1])+'</span></div>').join("")}catch(e){panel.hidden=true;tg?.showAlert?.("Доступ закрыт.")}};
+$("adminClose").onclick=()=>$("adminPanel").hidden=true;
+if(initData)fetch("/api/admin",{headers:apiHeaders()}).then(r=>{if(r.ok)$("adminOpen").hidden=false}).catch(()=>{});
+$("playlistCount").textContent=playlist.length||"";openSharedTrack();
