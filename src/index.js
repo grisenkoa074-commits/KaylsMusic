@@ -346,11 +346,11 @@ async function handleApi(request, env, url) {
 async function replyToMessage(env, message, origin) {
   const chatId = message.chat?.id; const text = (message.text || "").trim();
   if (!chatId) return;
-  const keyboard = { inline_keyboard: [[{ text: "🎧 Открыть KaylsMusic", web_app: { url: origin } }]] };
+  const keyboard = { inline_keyboard: [[{ text: "🎧 Открыть Kayl`s Music", web_app: { url: origin } }]] };
   if (/^\/(start|help)(?:@\w+)?/i.test(text)) {
     await telegram(env, "sendMessage", { chat_id: chatId, text: "Добро пожаловать в Kayl`s Music! Ищи музыку сразу в нескольких каталогах, слушай и скачивай треки, доступные для загрузки.", reply_markup: keyboard });
   } else if (text && !text.startsWith("/")) {
-    await telegram(env, "sendMessage", { chat_id: chatId, text: "Открой KaylsMusic, чтобы увидеть результаты из нескольких каталогов и слушать музыку прямо в приложении.", reply_markup: keyboard });
+    await telegram(env, "sendMessage", { chat_id: chatId, text: "Открой Kayl`s Music, чтобы увидеть результаты из нескольких каталогов и слушать музыку прямо в приложении.", reply_markup: keyboard });
   }
 }
 export default {
