@@ -37,15 +37,35 @@ $("openSearch").onclick=()=>{$("searchPanel").hidden=false;$("query").focus();$(
 $("closeSearch").onclick=()=>{$("searchPanel").hidden=true;$("query").value="";$("homeResults").innerHTML='<div class="hint">Введи название трека или исполнителя.</div>'};
 $("query").oninput=e=>{if(e.target.value.trim().length>=2)search(e.target.value,$("homeResults"))};
 $("query").onkeydown=e=>{if(e.key==="Enter")search(e.target.value,$("homeResults"))};
-async function play(t,list){if(!t.stream){tg?.showAlert?.("Для этого трека нет доступного предпрослушивания.");return}queue=list||queue;qi=queue.findIndex(x=>key(x)===key(t));current=t;$("playerTitle").textContent=t.title;$("playerArtist").textContent=t.artist;$("playerArt").src=t.artwork||"";$("playerHeart").textContent=has(t)?"♥":"♡";$("player").hidden=false;audio.src=t.stream;try{await audio.play();$("playPause").textContent="Ⅱ"}catch{$("playPause").textContent="▶"}history=[t,...history.filter(x=>key(x)!==key(t))].slice(0,50);persist();renderRecent()}
-$("playPause").onclick=async()=>{if(audio.paused){try{await audio.play();$("playPause").textContent="Ⅱ"}catch{}}else{audio.pause();$("playPause").textContent="▶"}};
-function next(){if(qi+1<queue.length)play(queue[++qi],queue);else $("playPause").textContent="▶"}function prev(){if(audio.currentTime>3){audio.currentTime=0;return}if(qi>0)play(queue[--qi],queue)}
+async function play(t,list){if(!t.stream){tg?.showAlert?.("Для этого трека нет доступного предпрослушивания.");return}queue=list||queue;qi=queue.findIndex(x=>key(x)===key(t));current=t;$("playerTitle").textContent=t.title;$("playerArtist").textContent=t.artist;$("playerArt").src=t.artwork||"";$("fpArt").src=t.artwork||"";$("fpTitle").textContent=t.title;$("fpArtist").textContent=t.artist;$("fpContext").textContent="Твоя музыка";$("playerHeart").textContent=has(t)?"♥":"♡";$("fpLike").textContent=has(t)?"♥":"♡";$("player").hidden=false;audio.src=t.stream;try{await audio.play();setPlaying(true)}catch{setPlaying(false)}history=[t,...history.filter(x=>key(x)!==key(t))].slice(0,100);persist();renderRecent();renderQueue()}
+function setPlaying(on){$("playPause").textContent=on?"Ⅱ":"▶";$("fpPlay").textContent=on?"Ⅱ":"▶"}
+function openFullPlayer(){$("fullPlayer").hidden=false;document.body.classList.add("player-open");$("fpLike").textContent=current&&has(current)?"♥":"♡";renderQueue()}
+function closeFullPlayer(){$("fullPlayer").hidden=true;document.body.classList.remove("player-open");$("queuePanel").hidden=true}
+function fmtTime(sec){if(!Number.isFinite(sec))return "0:00";return Math.floor(sec/60)+":"+String(Math.floor(sec%60)).padStart(2,"0")}
+function renderQueue(){const el=$("queueItems");if(!el)return;el.innerHTML=queue.length?queue.map((t,i)=>'<button class="queue-item" data-q="'+i+'"><img src="'+esc(t.artwork||"")+'"><span><b>'+esc(t.title)+'</b><small>'+esc(t.artist)+'</small></span>'+(i===qi?"●":"")+'</button>').join(""):'<div class="hint">Очередь пока пуста</div>';el.querySelectorAll("[data-q]").forEach(b=>b.onclick=()=>play(queue[+b.dataset.q],queue))}
+function dislikeCurrent(){if(!current)return;disliked=[current,...disliked.filter(t=>key(t)!==key(current))].slice(0,300);saved=saved.filter(t=>key(t)!==key(current));persist();next();tg?.HapticFeedback?.notificationOccurred?.("success")}
+$("playPause").onclick=async()=>{if(audio.paused){try{await audio.play();setPlaying(true)}catch{}}else{audio.pause();setPlaying(false)}};
+$("miniOpen").onclick=openFullPlayer;$("collapsePlayer").onclick=closeFullPlayer;
+$("fpPlay").onclick=()=>$("playPause").click();$("fpNext").onclick=next;$("fpPrev").onclick=prev;
+$("queueButton").onclick=()=>{$("queuePanel").hidden=!$("queuePanel").hidden;renderQueue()};
+$("closeQueue").onclick=()=>$("queuePanel").hidden=true;
+$("castButton").onclick=()=>tg?.showAlert?.("Трансляция на устройства пока не поддерживается этим источником аудио.");
+$("fpLike").onclick=()=>$("playerHeart").click();$("dislikeTrack").onclick=dislikeCurrent;
+$("fpShare").onclick=()=>current&&share(current);$("fpMore").onclick=()=>current&&share(current);
+$("fpArtistAvatar").onclick=()=>{if(!current)return;closeFullPlayer();switchView("homeView");$("searchPanel").hidden=false;$("query").value=current.artist;search(current.artist,$("homeResults"))};
+$("repeatButton").onclick=()=>{repeatOne=!repeatOne;$("repeatButton").classList.toggle("selected",repeatOne)};
+$("lyricsButton").onclick=()=>tg?.showAlert?.("Текст песни пока недоступен для этого трека.");
+$("timerButton").onclick=()=>{const mins=Number(prompt("Остановить музыку через сколько минут? (15, 30 или 60)","30"));if(![15,30,60].includes(mins))return;clearTimeout(sleepTimer);sleepTimer=setTimeout(()=>{audio.pause();setPlaying(false)},mins*60000);tg?.showAlert?.("Таймер установлен на "+mins+" мин.")};
+$("downloadButton").onclick=()=>{if(!current)return;if(!current.downloadable){tg?.showAlert?.("Для этого трека скачивание недоступно.");return}location.href="/api/download?source="+encodeURIComponent(current.source.toLowerCase())+"&id="+encodeURIComponent(current.id)};
+$("startWave").onclick=()=>{if(current){saved=[current,...saved.filter(t=>key(t)!==key(current))];persist()}closeFullPlayer();switchView("waveView")};
+$("seekBar").oninput=e=>{if(Number.isFinite(audio.duration))audio.currentTime=audio.duration*(Number(e.target.value)/1000)};
+function next(){if(repeatOne&&current){play(current,queue);return}if(qi+1<queue.length)play(queue[++qi],queue);else setPlaying(false)}function prev(){if(audio.currentTime>3){audio.currentTime=0;return}if(qi>0)play(queue[--qi],queue)}
 $("nextTrack").onclick=next;$("prevTrack").onclick=prev;audio.onended=next;$("playerHeart").onclick=()=>current&&toggleSaved(current);
-audio.ontimeupdate=()=>{if(audio.duration)$("progressBar").style.width=(audio.currentTime/audio.duration*100)+"%"};
+audio.ontimeupdate=()=>{if(audio.duration){const p=audio.currentTime/audio.duration*100;$("progressBar").style.width=p+"%";$("seekBar").value=Math.round(p*10);$("elapsedTime").textContent=fmtTime(audio.currentTime);$("totalTime").textContent="-"+fmtTime(audio.duration-audio.currentTime)}};audio.onplay=()=>setPlaying(true);audio.onpause=()=>setPlaying(false);
 function share(t){const u=new URL("/",location.origin);u.searchParams.set("track",JSON.stringify({id:t.id,source:t.source,title:t.title,artist:t.artist,artwork:t.artwork,stream:t.stream}));const url="https://t.me/share/url?url="+encodeURIComponent(u.href)+"&text="+encodeURIComponent(t.title+" — "+t.artist);if(tg?.openTelegramLink)tg.openTelegramLink(url);else if(navigator.share)navigator.share({title:t.title,url:u.href}).catch(()=>{});else navigator.clipboard?.writeText(u.href)}
 let waveTracks=[],waveLoading=false;
 async function makeWave(){
-  const target=$("waveResults"),seeds=[...saved,...history].filter((t,i,arr)=>arr.findIndex(x=>key(x)===key(t))===i).slice(0,12);
+  const target=$("waveResults"),seeds=[...saved,...history].filter(t=>!disliked.some(x=>key(x)===key(t))).filter((t,i,arr)=>arr.findIndex(x=>key(x)===key(t))===i).slice(0,12);
   if(!seeds.length){target.innerHTML='<div class="hint">Сначала сохрани ❤️ или послушай несколько треков. По ним KaylsMusic соберёт твою волну.</div>';return}
   if(waveLoading)return;
   waveLoading=true;target.innerHTML='<div class="hint">Подбираем похожих исполнителей и музыку по твоим вкусам…</div>';
