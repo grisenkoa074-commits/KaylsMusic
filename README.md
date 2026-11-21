@@ -50,18 +50,86 @@ Telegram-бот для поиска музыки по названию трек�
 
 **Не публикуйте токен и не добавляйте его в Git.**
 
-## Бесплатный деплой на Render
+## Размещение на Oracle Cloud Always Free (Ubuntu)
 
-В репозитории есть `render.yaml`, поэтому можно развернуть сервис как Blueprint:
+Для Telegram long polling нужен постоянно работающий процесс. На Oracle Cloud можно запустить бота на виртуальной машине и управлять им через systemd.
 
-1. Войдите в [Render](https://render.com/) и нажмите **New → Blueprint**.
-2. Подключите GitHub и выберите репозиторий `KaylsMusic`.
-3. Render прочитает `render.yaml` и создаст Web Service.
-4. В настройках созданного сервиса откройте **Environment** и добавьте `TELEGRAM_BOT_TOKEN` — токен от BotFather.
-5. Сохраните переменную и дождитесь успешного деплоя. Проверка состояния доступна по адресу сервиса + `/health`.
+### 1. Создайте виртуальную машину
 
-Сервис запускает Telegram long polling и HTTP health endpoint в одном процессе. На бесплатном Web Service Render может усыплять приложение после периода отсутствия входящих HTTP-запросов. Для уменьшения простоев можно настроить внешний мониторинг (например, UptimeRobot) на URL `/health`, но это не гарантирует постоянную доступность: условия бесплатного тарифа Render могут меняться. Для надёжной круглосуточной работы нужен тариф без автоматического сна.
+1. Зарегистрируйтесь в [Oracle Cloud Free Tier](https://www.oracle.com/cloud/free/).
+2. В консоли откройте **Compute → Instances → Create instance**.
+3. Выберите Ubuntu 22.04 или 24.04, образ для **aarch64 (ARM)** если создаёте Ampere A1.
+4. Для бесплатной конфигурации Ampere A1 используйте суммарно не более **2 OCPU и 12 GB RAM**. Также можно выбрать Always Free AMD Micro, если он доступен в вашем регионе.
+5. В разделе Networking выберите публичную подсеть и назначьте публичный IPv4.
+6. Добавьте свой SSH public key и сохраните private key в безопасном месте.
+7. Создайте экземпляр и дождитесь состояния **Running**. Если видите *Out of host capacity*, попробуйте позже или другой Availability Domain в домашнем регионе.
 
+Always Free вычислительные ресурсы доступны в домашнем регионе аккаунта. Бесплатная квота Ampere A1 — 1 500 OCPU-часов и 9 000 GB-часов в месяц (эквивалент 2 OCPU и 12 GB RAM). Oracle может признать Always Free VM простаивающей и отозвать её, если за 7 дней CPU, сеть и (для A1) память остаются ниже установленных порогов. Условия и доступность проверяйте на официальной странице.
+
+### 2. Подключитесь по SSH
+
+На своём компьютере откройте терминал и выполните команду, заменив путь к ключу и публичный IP:
+
+```bash
+ssh -i ~/.ssh/oci_key ubuntu@YOUR_PUBLIC_IP
+```
+
+На Windows можно использовать PowerShell с OpenSSH. Если SSH не подключается, проверьте, что в Security List/Network Security Group разрешён входящий TCP порт 22 только с вашего IP-адреса.
+
+### 3. Скачайте проект и установите сервис
+
+На виртуальной машине выполните:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y git
+git clone https://github.com/grisenkoa074-commits/KaylsMusic.git
+cd KaylsMusic
+sudo bash deploy/oracle_setup.sh
+```
+
+Скрипт установит Python и зависимости, создаст системного пользователя `kaylsmusic`, подготовит виртуальное окружение и установит службу systemd. Он не запускает бота до добавления токена.
+
+### 4. Добавьте токен Telegram и запустите бота
+
+```bash
+sudo nano /opt/kaylsmusic/.env
+```
+
+Укажите свой токен:
+
+```env
+TELEGRAM_BOT_TOKEN=ВСТАВЬТЕ_ТОКЕН_ОТ_BOTFATHER
+PORT=10000
+LOG_LEVEL=INFO
+```
+
+Сохраните файл (в nano: Ctrl+O, Enter, Ctrl+X), затем выполните:
+
+```bash
+sudo chown kaylsmusic:kaylsmusic /opt/kaylsmusic/.env
+sudo chmod 600 /opt/kaylsmusic/.env
+sudo systemctl start kaylsmusic
+sudo systemctl status kaylsmusic
+```
+
+Проверить логи:
+
+```bash
+sudo journalctl -u kaylsmusic -f
+```
+
+Полезные команды:
+
+```bash
+sudo systemctl restart kaylsmusic
+sudo systemctl stop kaylsmusic
+sudo systemctl enable kaylsmusic
+``
+
+Служба автоматически запускается после перезагрузки VM и перезапускается при сбое. Входящий порт для Telegram-бота открывать не нужно: бот сам подключается к Telegram через исходящие соединения. HTTP health endpoint на порту `PORT` оставлен в приложении для локальной проверки, но для обычной работы бота его не требуется публиковать в интернет.
+
+**Безопасность:** никогда не коммитьте `.env`, Telegram-токен или приватный SSH-ключ в GitHub. Не открывайте SSH (порт 22) для всего интернета без необходимости.
 ## Структура проекта
 
 - `bot.py` — Telegram-бот и интеграции поиска.
