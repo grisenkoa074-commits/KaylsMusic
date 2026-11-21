@@ -98,7 +98,7 @@ async function itunesSearch(query) {
     stream: t.previewUrl || "", downloadable: false, download: false, permalink: t.trackViewUrl || "https://music.apple.com"
   }));
 }
-async function searchAll(query, env) {
+async function searchSingle(query, env) {
   const jobs = [
     ["Audius", () => audiusSearch(query)],
     ["Jamendo", () => jamendoSearch(query, env)],
@@ -118,6 +118,37 @@ async function searchAll(query, env) {
     if (seen.has(key)) return false; seen.add(key); return true;
   });
   return { tracks: unique.slice(0, 28), sources };
+}
+function searchQueryVariants(query) {
+  const q = String(query || "").trim();
+  const variants = [q];
+  if (/^[\\u0400-\\u04FF\\s'-]+$/.test(q) && q.length <= 24) {
+    const map = {а:"a",б:"b",в:"v",г:"g",д:"d",е:"e",ё:"yo",ж:"zh",з:"z",и:"i",й:"y",к:"k",л:"l",м:"m",н:"n",о:"o",п:"p",р:"r",с:"s",т:"t",у:"u",ф:"f",х:"kh",ц:"ts",ч:"ch",ш:"sh",щ:"shch",ъ:"",ы:"y",ь:"",э:"e",ю:"yu",я:"ya"};
+    const latin = [...q.toLowerCase()].map(ch => map[ch] ?? ch).join("");
+    variants.push(latin);
+    // Many artist handles use stylized spellings (e.g. "madk1d").
+    if (/^[a-z0-9]+$/.test(latin)) {
+      variants.push(latin.replace(/e/g, "a"));
+      variants.push(latin.replace(/i/g, "1"));
+      variants.push(latin.replace(/e/g, "a").replace(/i/g, "1"));
+    }
+  }
+  return [...new Set(variants.map(x => x.trim()).filter(Boolean))].slice(0, 4);
+}
+async function searchAll(query, env) {
+  const variants = searchQueryVariants(query);
+  const batches = await Promise.allSettled(variants.map(q => searchSingle(q, env)));
+  const tracks = [], sources = {};
+  for (const batch of batches) if (batch.status === "fulfilled") {
+    tracks.push(...(batch.value.tracks || []));
+    Object.assign(sources, batch.value.sources || {});
+  }
+  const seen = new Set();
+  const unique = tracks.filter(t => {
+    const k = (t.source || "") + "|" + (t.id || "") + "|" + (t.title || "").toLowerCase() + "|" + (t.artist || "").toLowerCase();
+    if (seen.has(k)) return false; seen.add(k); return true;
+  });
+  return { tracks: unique.slice(0, 32), sources, queryVariants: variants.length };
 }
 async function discoverFeed(env) {
   const markets=["ru","kz","ua","by"];
