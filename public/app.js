@@ -59,6 +59,16 @@ async function makeWave(){
   finally{waveLoading=false}
 }
 $("refreshWave").onclick=makeWave;$("playSaved").onclick=()=>saved.length&&play(saved[0],saved);
+async function loadDiscover(){
+ const artistsEl=$("popularArtists"),tracksEl=$("popularTracks");
+ try{
+  const r=await fetch("/api/discover"),d=await r.json();if(!r.ok)throw Error(d.error||"Не удалось загрузить подборку");
+  const artists=d.artists||[];
+  artistsEl.innerHTML=artists.length?artists.map((a,i)=>'<button class="artist-card" data-artist="'+i+'"><img src="'+esc(a.picture||"")+'" alt="" onerror="this.style.opacity=.25"><b>'+esc(a.name)+'</b></button>').join(""):'<div class="hint">Популярные исполнители пока недоступны.</div>';
+  artistsEl.querySelectorAll("[data-artist]").forEach(b=>b.onclick=()=>{$("searchPanel").hidden=false;$("query").value=artists[+b.dataset.artist].name;search($("query").value,$("homeResults"));$("searchPanel").scrollIntoView({behavior:"smooth",block:"start"})});
+  const tracks=d.tracks||[];if(tracks.length)render(tracksEl,tracks);else tracksEl.innerHTML='<div class="hint">Популярные треки пока недоступны.</div>';
+ }catch(e){artistsEl.innerHTML='<div class="hint">Не удалось загрузить популярных исполнителей.</div>';tracksEl.innerHTML='<div class="hint">'+esc(e.message)+'</div>'}
+}
 function shared(){const raw=new URL(location.href).searchParams.get("track");if(!raw)return;try{const t=JSON.parse(raw);if(t.title&&t.stream){switchView("homeView");render($("homeResults"),[t]);}}catch{}}
 $("adminOpen").onclick=async()=>{try{const r=await fetch("/api/admin",{headers:{"x-telegram-init-data":initData}}),d=await r.json();if(!r.ok)throw Error();$("adminPanel").hidden=false;$("adminData").textContent=JSON.stringify(d.admin||d,null,2)}catch{tg?.showAlert?.("Доступ закрыт")}};$("adminClose").onclick=()=>$("adminPanel").hidden=true;
 if(initData)fetch("/api/admin",{headers:{"x-telegram-init-data":initData}}).then(r=>{if(r.ok)$("adminOpen").hidden=false}).catch(()=>{});
