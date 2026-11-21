@@ -2,10 +2,13 @@ const tg=window.Telegram?.WebApp;tg?.ready();tg?.expand();tg?.setHeaderColor?.("
 const $=id=>document.getElementById(id),initData=tg?.initData||"",audio=$("audio");
 const K="kaylsmusic.collection.v1",H="kaylsmusic.history.v1";
 function read(k){try{return JSON.parse(localStorage.getItem(k)||"[]")}catch{return []}}
-let saved=read(K),history=read(H),results=[],queue=[],qi=-1,activeSource="all",current=null;
+let saved=read(K),history=read(H),disliked=[],results=[],queue=[],qi=-1,activeSource="all",current=null,repeatOne=false,cloudReady=false,cloudTimer=null,sleepTimer=null;
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const key=t=>t.source+"|"+t.id,has=t=>saved.some(x=>key(x)===key(t));
-function persist(){localStorage.setItem(K,JSON.stringify(saved));localStorage.setItem(H,JSON.stringify(history.slice(0,50)));$("savedCount").textContent=saved.length;$("historyCount").textContent=history.length;}
+function persist(sync=true){localStorage.setItem(K,JSON.stringify(saved));localStorage.setItem(H,JSON.stringify(history.slice(0,100)));$("savedCount").textContent=saved.length;$("historyCount").textContent=history.length;if(sync&&cloudReady)scheduleCloudSave();}
+function scheduleCloudSave(){clearTimeout(cloudTimer);cloudTimer=setTimeout(async()=>{try{const r=await fetch("/api/me",{method:"PUT",headers:{"content-type":"application/json","x-telegram-init-data":initData},body:JSON.stringify({saved,history:history.slice(0,100),disliked})});if(!r.ok)throw Error();setAccountStatus("Синхронизация включена · Telegram");}catch{setAccountStatus("Не удалось синхронизировать. Проверь подключение.");}},500);}
+function setAccountStatus(value){const el=$("accountStatus");if(el)el.textContent=value;}
+async function loadAccount(){if(!initData){setAccountStatus("Открой приложение через Telegram для синхронизации.");return;}try{const r=await fetch("/api/me",{headers:{"x-telegram-init-data":initData}}),d=await r.json();if(!r.ok){setAccountStatus(r.status===503?"Нужно подключить Cloudflare KV для синхронизации.":"Не удалось подтвердить аккаунт Telegram.");return;}saved=Array.isArray(d.data?.saved)?d.data.saved:[];history=Array.isArray(d.data?.history)?d.data.history:[];disliked=Array.isArray(d.data?.disliked)?d.data.disliked:[];cloudReady=true;persist(false);renderRecent();if(!$("libraryView").hidden)render($("libraryResults"),saved);setAccountStatus("Синхронизация включена · "+(d.user?.first_name||"Telegram"));}catch{setAccountStatus("Нет связи с сервером синхронизации.");}}
 function switchView(id){
  const views=[...document.querySelectorAll(".view")];views.forEach(v=>{v.hidden=v.id!==id;v.classList.remove("view-enter")});
  document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view===id));$("adminPanel").hidden=true;
@@ -72,4 +75,4 @@ async function loadDiscover(){
 function shared(){const raw=new URL(location.href).searchParams.get("track");if(!raw)return;try{const t=JSON.parse(raw);if(t.title&&t.stream){switchView("homeView");render($("homeResults"),[t]);}}catch{}}
 $("adminOpen").onclick=async()=>{try{const r=await fetch("/api/admin",{headers:{"x-telegram-init-data":initData}}),d=await r.json();if(!r.ok)throw Error();$("adminPanel").hidden=false;$("adminData").textContent=JSON.stringify(d.admin||d,null,2)}catch{tg?.showAlert?.("Доступ закрыт")}};$("adminClose").onclick=()=>$("adminPanel").hidden=true;
 if(initData)fetch("/api/admin",{headers:{"x-telegram-init-data":initData}}).then(r=>{if(r.ok)$("adminOpen").hidden=false}).catch(()=>{});
-persist();renderRecent();loadDiscover();shared();
+persist(false);renderRecent();loadAccount();loadDiscover();shared();
