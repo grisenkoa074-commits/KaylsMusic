@@ -1,0 +1,19 @@
+[Unit]
+Description=KaylsMusic Telegram music search bot
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=kaylsmusic
+Group=kaylsmusic
+WorkingDirectory=/opt/kaylsmusic
+EnvironmentFile=/opt/kaylsmusic/.env
+ExecStart=/opt/kaylsmusic/.venv/bin/python /opt/kaylsmusic/bot.py
+Restart=always
+RestartSec=5
+KillSignal=SIGINT
+TimeoutStopSec=30
+
+[Install]
+WantedBy=multi-user.target
