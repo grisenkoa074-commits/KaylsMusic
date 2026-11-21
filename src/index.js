@@ -2,7 +2,8 @@ const ADMIN_ID = "8179633402";
 const TELEGRAM_API = "https://api.telegram.org";
 const AUDIUS_API = "https://discoveryprovider.audius.co/v1";
 const APP_NAME = "KaylsMusic";
-const MAX_RESULTS = 8;\nconst WAVE_LIMIT = 60;
+const MAX_RESULTS = 8;
+const WAVE_LIMIT = 60;
 
 function json(data, status = 200) {
   return new Response(JSON.stringify(data), { status, headers: { "content-type": "application/json; charset=utf-8", "cache-control": "no-store" } });
@@ -164,7 +165,8 @@ async function verifyDownload(source, id, env) {
   return null;
 }
 async function handleApi(request, env, url) {
-  if (request.method === "GET" && url.pathname === "/api/wave") return buildWave(request, env);\n  if (request.method === "GET" && url.pathname === "/api/search") {
+  if (request.method === "GET" && url.pathname === "/api/wave") return buildWave(request, env);
+  if (request.method === "GET" && url.pathname === "/api/search") {
     const q = (url.searchParams.get("q") || "").trim().slice(0, 120);
     if (q.length < 2) return json({ tracks: [], sources: {} });
     try { return json(await searchAll(q, env)); }
