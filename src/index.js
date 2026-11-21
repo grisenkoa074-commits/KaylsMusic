@@ -128,7 +128,8 @@ async function discoverFeed(env) {
     return (d.feed?.entry||[]).map(e=>({artist:e["im:artist"]?.label||"",title:e["im:name"]?.label||"",picture:(e["im:image"]||[]).slice(-1)[0]?.label||"",market}));
   }));
   const chartSeeds=[];for(const feed of feeds)if(feed.status==="fulfilled")chartSeeds.push(...feed.value);
-  if(!chartSeeds.length){for(const artist of ["Miyagi & Andy Panda","MACAN","JONY","Zivert","Скриптонит","Мот","ANNA ASTI","HammAli & Navai","Artik & Asti","Дора"])chartSeeds.push({artist,title:"",picture:"",market:"fallback"});}\n
+  if(!chartSeeds.length){for(const artist of ["Miyagi & Andy Panda","MACAN","JONY","Zivert","Скриптонит","Мот","ANNA ASTI","HammAli & Navai","Artik & Asti","Дора"])chartSeeds.push({artist,title:"",picture:"",market:"fallback"});}
+
   const counts=new Map();for(const s of chartSeeds){const k=s.artist.trim();if(k)counts.set(k,(counts.get(k)||0)+1);}
   const artistNames=[...counts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,12).map(x=>x[0]);
   const artistResults=await Promise.allSettled(artistNames.map(async name=>{
