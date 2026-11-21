@@ -10,6 +10,52 @@ function persist(sync=true){localStorage.setItem(K,JSON.stringify(saved));localS
 function scheduleCloudSave(){clearTimeout(cloudTimer);cloudTimer=setTimeout(async()=>{try{const r=await fetch("/api/me",{method:"PUT",headers:{"content-type":"application/json","x-telegram-init-data":initData},body:JSON.stringify({saved,history:history.slice(0,100),disliked})});if(!r.ok)throw Error();setAccountStatus("Синхронизация включена · Telegram");}catch{setAccountStatus("Не удалось синхронизировать. Проверь подключение.");}},500);}
 function setAccountStatus(value){const el=$("accountStatus");if(el)el.textContent=value;}
 async function loadAccount(){if(!initData){setAccountStatus("Открой приложение через Telegram для синхронизации.");return;}try{const r=await fetch("/api/me",{headers:{"x-telegram-init-data":initData}}),d=await r.json();if(!r.ok){setAccountStatus(r.status===503?"Нужно подключить Cloudflare KV для синхронизации.":"Не удалось подтвердить аккаунт Telegram.");return;}const localSaved=saved,localHistory=history;saved=Array.isArray(d.data?.saved)?d.data.saved:[];saved=[...saved,...localSaved.filter(t=>!saved.some(x=>key(x)===key(t)))];history=Array.isArray(d.data?.history)?d.data.history:[];history=[...history,...localHistory.filter(t=>!history.some(x=>key(x)===key(t)))].slice(0,100);disliked=Array.isArray(d.data?.disliked)?d.data.disliked:[];cloudReady=true;persist(false);scheduleCloudSave();renderRecent();if(!$("libraryView").hidden)render($("libraryResults"),saved);setAccountStatus("Синхронизация включена · "+(d.user?.first_name||"Telegram"));}catch{setAccountStatus("Нет связи с сервером синхронизации.");}}
+
+function openYandexCatalog(){
+ const q=$("yandexQuery").value.trim();
+ const url="https://music.yandex.ru/search?text="+encodeURIComponent(q);
+ if(tg?.openLink)tg.openLink(url);else window.open(url,"_blank","noopener");
+}
+function parseYandexEmbed(raw){
+ let value=String(raw||"").trim();
+ const match=value.match(/https?:\\/\\/music\\.yandex\\.(?:ru|com|kz|by)\\/iframe\\/[^\\s"'<>]*/i);
+ if(match)value=match[0];
+ if(value.startsWith("<")) {
+  const src=value.match(/src\\s*=\\s*["']([^"']+)["']/i);
+  if(!src)throw Error("Не удалось найти ссылку в HTML-коде.");
+  value=src[1];
+ }
+ let u;try{u=new URL(value)}catch{throw Error("Вставь корректную ссылку Яндекс Музыки или HTML-код плеера.");}
+ if(!["music.yandex.ru","music.yandex.com","music.yandex.kz","music.yandex.by"].includes(u.hostname))throw Error("Разрешены только ссылки music.yandex.");
+ if(u.pathname.startsWith("/iframe/")){
+  const hash=u.hash.replace(/^#\/?/,"");
+  if(!/^(track|album|playlist)\\/[A-Za-z0-9_-]+(?:\\/[A-Za-z0-9_-]+)?$/.test(hash))throw Error("В ссылке не найден поддерживаемый трек, альбом или плейлист.");
+  return "https://music.yandex.ru/iframe/#"+hash;
+ }
+ const albumTrack=u.pathname.match(/^\\/album\\/(\\d+)\\/track\\/(\\d+)/);
+ if(albumTrack)return "https://music.yandex.ru/iframe/#track/"+albumTrack[1]+"/"+albumTrack[2];
+ const album=u.pathname.match(/^\\/album\\/(\\d+)/);
+ if(album)return "https://music.yandex.ru/iframe/#album/"+album[1];
+ throw Error("Открой в Яндекс Музыке «Поделиться» → «HTML-код» и вставь полученную ссылку.");
+}
+function loadYandexEmbed(){
+ const status=$("yandexStatus"),target=$("yandexEmbed");
+ try{
+  const src=parseYandexEmbed($("yandexLink").value);
+  const frame=document.createElement("iframe");
+  frame.src=src;frame.title="Официальный плеер Яндекс Музыки";
+  frame.allow="autoplay; encrypted-media; fullscreen";
+  frame.allowFullscreen=true;frame.loading="lazy";
+  frame.referrerPolicy="no-referrer-when-downgrade";
+  target.replaceChildren(frame);
+  status.textContent="Плеер загружен с music.yandex.ru. Управление и воспроизведение выполняет Яндекс.";
+ }catch(e){status.textContent=e.message;}
+}
+$("yandexSearch").onclick=openYandexCatalog;
+$("yandexQuery").onkeydown=e=>{if(e.key==="Enter")openYandexCatalog()};
+$("yandexLoad").onclick=loadYandexEmbed;
+$("yandexLink").onkeydown=e=>{if(e.key==="Enter")loadYandexEmbed()};
+
 function switchView(id){
  const views=[...document.querySelectorAll(".view")];views.forEach(v=>{v.hidden=v.id!==id;v.classList.remove("view-enter")});
  document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view===id));$("adminPanel").hidden=true;
