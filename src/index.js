@@ -174,7 +174,7 @@ async function discoverFeed(env) {
   const all=[];for(const batch of batches)if(batch.status==="fulfilled")all.push(...batch.value.tracks);
   const popularity=new Map(artistNames.map((name,i)=>[name.toLowerCase(),artistNames.length-i]));
   const seen=new Set();
-  const tracks=all.filter(t=>t.stream).map(t=>({...t,_rank:(popularity.get((t.artist||"").toLowerCase())||0)*20+(t.source==="Audius"?5:0)}))
+  const tracks=all.filter(t=>t.stream && ["Audius","Jamendo"].includes(t.source)).map(t=>({...t,_rank:(popularity.get((t.artist||"").toLowerCase())||0)*20+(t.source==="Audius"?5:0)}))
     .filter(t=>{const k=(t.title+"|"+t.artist).toLowerCase();if(seen.has(k))return false;seen.add(k);return true})
     .sort((a,b)=>b._rank-a._rank).slice(0,30).map(({_rank,...t})=>t);
   return json({artists,tracks,market:"CIS",fallback:!feeds.some(x=>x.status==="fulfilled"),markets:feeds.map((x,i)=>x.status==="fulfilled"?markets[i]:null).filter(Boolean)});
@@ -206,7 +206,7 @@ async function buildWave(request, env) {
   const seedMoods=new Set(moods.map(norm));
   const seen=new Set();
   const tracks=candidates.filter(t=>{
-    if(!t.stream)return false;
+    if(!t.stream||!["Audius","Jamendo"].includes(t.source))return false;
     const k=(t.source||"")+"|"+String(t.id||"");
     if(seedKeys.has(k)||seen.has(k))return false;
     seen.add(k);return true;
@@ -269,7 +269,9 @@ async function sendLicensedAudio(request,env) {
   const declared=Number(upstream.headers.get("content-length")||0);
   if(declared>50*1024*1024)return json({error:"Файл больше лимита Telegram 50 МБ."},413);
   if(type.includes("text/html")||type.includes("application/json"))return json({error:"Источник вернул не аудиофайл."},415);
-  if(type && !(type.includes("audio/mpeg")||type.includes("audio/mp3")||type.includes("application/octet-stream")))return json({error:"Источник не предоставил MP3-файл."},415);
+  const isM4a=type.includes("audio/mp4")||type.includes("audio/x-m4a")||type.includes("audio/m4a");
+  const isMp3=!type||type.includes("audio/mpeg")||type.includes("audio/mp3")||type.includes("application/octet-stream");
+  if(!isMp3&&!isM4a)return json({error:"Источник не предоставил MP3 или M4A файл."},415);
   const bytes=await upstream.arrayBuffer();
   if(bytes.byteLength>50*1024*1024)return json({error:"Файл больше лимита Telegram 50 МБ."},413);
   if(bytes.byteLength<1024)return json({error:"Аудиофайл пустой или повреждён."},415);
@@ -278,7 +280,7 @@ async function sendLicensedAudio(request,env) {
   form.set("chat_id",String(user.id));
   form.set("title",safe(body.title,"Track"));
   form.set("performer",safe(body.artist,"Unknown artist"));
-  form.set("audio",new Blob([bytes],{type:"audio/mpeg"}),safe(body.title,"track")+".mp3");
+  form.set("audio",new Blob([bytes],{type:isM4a?"audio/mp4":"audio/mpeg"}),safe(body.title,"track")+(isM4a?".m4a":".mp3"));
   const sent=await fetch(TELEGRAM_API+"/bot"+env.BOT_TOKEN+"/sendAudio",{method:"POST",body:form});
   const result=await sent.json();
   if(!sent.ok||!result.ok)return json({error:result.description||"Telegram не смог отправить MP3."},502);
