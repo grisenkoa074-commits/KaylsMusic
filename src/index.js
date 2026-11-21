@@ -175,7 +175,6 @@ export default {
         url: `${url.origin}/webhook`,
         secret_token: env.WEBHOOK_SECRET,
         allowed_updates: ["message"],
-        drop_pending_updates: true,
       });
       return json({ ok: true, webhook_set: result });
     }
