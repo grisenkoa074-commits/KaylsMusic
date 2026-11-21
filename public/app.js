@@ -18,10 +18,10 @@ function openYandexCatalog(){
 }
 function parseYandexEmbed(raw){
  let value=String(raw||"").trim();
- const match=value.match(/https?:\\/\\/music\\.yandex\\.(?:ru|com|kz|by)\\/iframe\\/[^\\s"'<>]*/i);
+ const match=value.match(/https?:\/\/music\.yandex\.(?:ru|com|kz|by)\/iframe\/[^\s"'<>]*/i);
  if(match)value=match[0];
  if(value.startsWith("<")) {
-  const src=value.match(/src\\s*=\\s*["']([^"']+)["']/i);
+  const src=value.match(/src\s*=\s*["']([^"']+)["']/i);
   if(!src)throw Error("Не удалось найти ссылку в HTML-коде.");
   value=src[1];
  }
@@ -29,12 +29,12 @@ function parseYandexEmbed(raw){
  if(!["music.yandex.ru","music.yandex.com","music.yandex.kz","music.yandex.by"].includes(u.hostname))throw Error("Разрешены только ссылки music.yandex.");
  if(u.pathname.startsWith("/iframe/")){
   const hash=u.hash.replace(/^#\/?/,"");
-  if(!/^(track|album|playlist)\\/[A-Za-z0-9_-]+(?:\\/[A-Za-z0-9_-]+)?$/.test(hash))throw Error("В ссылке не найден поддерживаемый трек, альбом или плейлист.");
+  if(!/^(track|album|playlist)\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)?$/.test(hash))throw Error("В ссылке не найден поддерживаемый трек, альбом или плейлист.");
   return "https://music.yandex.ru/iframe/#"+hash;
  }
- const albumTrack=u.pathname.match(/^\\/album\\/(\\d+)\\/track\\/(\\d+)/);
+ const albumTrack=u.pathname.match(/^\/album\/(\d+)\/track\/(\d+)/);
  if(albumTrack)return "https://music.yandex.ru/iframe/#track/"+albumTrack[1]+"/"+albumTrack[2];
- const album=u.pathname.match(/^\\/album\\/(\\d+)/);
+ const album=u.pathname.match(/^\/album\/(\d+)/);
  if(album)return "https://music.yandex.ru/iframe/#album/"+album[1];
  throw Error("Открой в Яндекс Музыке «Поделиться» → «HTML-код» и вставь полученную ссылку.");
 }
