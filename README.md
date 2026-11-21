@@ -1,108 +1,64 @@
-# KaylsMusic Telegram Bot
+# KaylsMusic
 
-Telegram-бот для поиска музыки по названию трека или исполнителю. Развёртывание — Cloudflare Workers Free, без VPS и без банковской карты.
+Telegram-бот и Telegram Mini App для поиска музыки сразу в нескольких каталогах. Развёртывание — Cloudflare Workers Free.
 
-## Возможности
+## Что уже реализовано в коде
 
-- Поиск до 5 совпадений через Deezer.
-- Автоматический переход на iTunes, если Deezer недоступен или не нашёл совпадений.
-- Название, исполнитель, длительность и кнопка-ссылка на страницу трека.
-- Команды `/start`, `/help`, `/search запрос`.
-- Telegram Webhook с секретной проверкой запроса.
-- HTTPS и health check по `/health`.
+- Telegram Mini App с адаптивным фиолетовым интерфейсом.
+- Единый поиск по Audius, Jamendo, Deezer и iTunes.
+- Встроенное воспроизведение потоков Audius и доступных превью Deezer/iTunes; Jamendo отдаёт поток по API.
+- Скачивание Audius/Jamendo только при положительном разрешении каталога/автора.
+- Кнопка «Поделиться» для отправки ссылки на трек.
+- Владелец приложения задаётся Telegram ID в `src/index.js` (`8179633402`).
+- Проверка подписи Telegram Mini App initData на сервере перед доступом к API админ-панели.
+- Админ-панель владельца с состоянием подключённых каталогов.
+- Кнопка меню Telegram «KaylsMusic» регистрируется при вызове защищённого `/setup`.
 
-## Бесплатный хостинг
+**Ограничение:** Deezer и iTunes предоставляют в этом приложении только доступные превью/ссылки, а не скачивание полных коммерческих записей. Скачивание полных файлов не обходится и не открывается там, где автор/платформа не разрешили загрузку.
 
-Используется [Cloudflare Workers Free](https://www.cloudflare.com/developer-platform/workers/). Для работы бота не нужна постоянно запущенная виртуальная машина: Telegram отправляет обновления на Worker через HTTPS webhook.
+## Cloudflare deployment
 
-Бесплатный тариф на момент подготовки README включает до 100 000 запросов в сутки и 10 мс CPU на одно выполнение. Для обычного музыкального Telegram-бота этого достаточно с большим запасом. Лимиты и условия могут изменяться: [официальные лимиты](https://developers.cloudflare.com/workers/platform/limits/).
+Cloudflare Workers Free использует HTTPS webhook и может раздавать статические файлы Mini App из папки `public`.
 
-## Развёртывание — пошагово
+1. В Cloudflare откройте **Workers & Pages → kaylsmusic**.
+2. Убедитесь, что GitHub integration подключена к `grisenkoa074-commits/KaylsMusic`, а Worker name — `kaylsmusic`.
+3. После push Cloudflare Builds должен автоматически развернуть Worker и файлы Mini App. В `wrangler.toml` указан assets directory `./public`.
+4. В **Settings → Variables and Secrets** должны быть секреты:
+   - `BOT_TOKEN` — токен Telegram-бота.
+   - `WEBHOOK_SECRET` — тот же случайный секрет, который уже используется для webhook.
+   - `JAMENDO_CLIENT_ID` — необязательно, но нужно для включения поиска и скачивания Jamendo. Получите Client ID в [Jamendo Developer Portal](https://devportal.jamendo.com/), затем добавьте его как Secret или Variable. Не добавляйте Client ID в публичный HTML/JS.
+5. После успешного деплоя повторно вызовите защищённый endpoint `/setup`, чтобы обновить webhook и установить кнопку Mini App в меню Telegram.
 
-### 1. Создайте Cloudflare аккаунт
+### Повторная регистрация /setup (Windows PowerShell)
 
-1. Откройте [Cloudflare Sign Up](https://dash.cloudflare.com/sign-up).
-2. Зарегистрируйтесь на бесплатном тарифе. Для Workers Free банковская карта не требуется.
-3. Подтвердите email и войдите в панель Cloudflare.
-
-### 2. Подключите GitHub
-
-1. Откройте Cloudflare Dashboard → **Workers & Pages**.
-2. Нажмите **Create application**.
-3. Выберите **GitHub** и разрешите Cloudflare доступ к репозиторию.
-4. Выберите `grisenkoa074-commits/KaylsMusic`.
-5. В качестве имени Worker укажите строго `kaylsmusic` (оно должно совпадать с `name` в `wrangler.toml`). В настройках сборки оставьте корневую папку репозитория. Файл `wrangler.toml` уже содержит настройки Worker.
-6. Нажмите **Save and Deploy**.
-
-Cloudflare создаст Worker и выдаст адрес примерно такого вида:
-
-`https://kaylsmusic.<your-subdomain>.workers.dev`
-
-Официальная инструкция: [Connect a Git repository](https://developers.cloudflare.com/workers/ci-cd/builds/).
-
-### 3. Добавьте два секрета
-
-Откройте созданный Worker → **Settings → Variables and Secrets** (название раздела может немного отличаться) и добавьте два значения типа **Secret**:
-
-- `BOT_TOKEN` — токен от [@BotFather](https://t.me/BotFather).
-- `WEBHOOK_SECRET` — случайная строка из латинских букв, цифр, дефисов или подчёркиваний, длиной 32–64 символа. Например, можно сгенерировать её любым надёжным генератором паролей.
-
-Не используйте пример из документации как реальный секрет. Сохраните значение `WEBHOOK_SECRET`: оно понадобится один раз для подключения Telegram webhook.
-
-После добавления секретов выполните **Deploy** / **Save and deploy**, если панель попросит применить изменения.
-
-### 4. Подключите Telegram к Worker
-
-Откройте PowerShell на Windows или терминал на Mac/Linux и выполните запрос, заменив адрес Worker и значение секрета:
-
-**PowerShell (Windows):**
+Используйте тот же WEBHOOK_SECRET, что сохранён в Cloudflare:
 
 ```powershell
-$worker = "https://kaylsmusic.YOUR-SUBDOMAIN.workers.dev"
-$secret = "PASTE_THE_SAME_WEBHOOK_SECRET"
+$worker = "https://kaylsmusic.grisenkoa074.workers.dev"
+$secret = Read-Host "Вставь WEBHOOK_SECRET"
 Invoke-RestMethod -Method Post -Uri "$worker/setup" -Headers @{ Authorization = "Bearer $secret" }
 ```
 
-**macOS / Linux:**
+Ожидаемый ответ содержит `ok: true` и `mini_app_menu_set: true`. Не отправляйте токен или секрет в чат и не сохраняйте их в GitHub.
 
-```bash
-WORKER="https://kaylsmusic.YOUR-SUBDOMAIN.workers.dev"
-SECRET="PASTE_THE_SAME_WEBHOOK_SECRET"
-curl -X POST "$WORKER/setup" -H "Authorization: Bearer $SECRET"
-```
+## Проверка
 
-В ответе должно быть `"ok": true`. Этот защищённый запрос регистрирует webhook в Telegram. Не публикуйте секрет и не отправляйте его в чат.
+- Откройте `https://kaylsmusic.grisenkoa074.workers.dev/health` — должен вернуться JSON со статусом `ok`.
+- В Telegram откройте чат с ботом и нажмите кнопку меню **KaylsMusic** или отправьте `/start), затем нажмите кнопку открытия приложения.
+- В Mini App выполните поиск, например `Daft Punk` или `Chill`.
+- Если добавлен Jamendo Client ID, Jamendo появится среди источников.
+- Только владелец с Telegram ID `8179633402` увидит вход в панель владельца.
 
-### 5. Проверьте бота
+## Источники API и разрешения
 
-1. Откройте адрес Worker + `/health` в браузере. Должен появиться ответ `{"status":"ok","service":"KaylsMusic"}`.
-2. Откройте своего бота в Telegram.
-3. Отправьте `/start`.
-4. Попробуйте поиск: `Daft Punk One More Time`.
-
-## Обновление кода
-
-После подключения GitHub Cloudflare автоматически собирает и публикует изменения при каждом push в основную ветку. Секреты остаются в настройках Cloudflare и в GitHub не попадают.
-
-## Локальный Python-вариант
-
-Файл `bot.py` и `requirements.txt` сохранены для локального запуска через long polling:
-
-```bash
-python -m venv .venv
-# Windows: .venv\\Scripts\\activate
-# macOS/Linux:
-source .venv/bin/activate
-pip install -r requirements.txt
-cp .env.example .env
-# Укажите TELEGRAM_BOT_TOKEN в .env
-python bot.py
-```
-
-Cloudflare Worker использует реализацию из `src/index.js`; Python-версия не нужна для Cloudflare-деплоя.
+- [Audius API](https://docs.audius.co/api/) — поиск, потоковое воспроизведение; загрузка проверяется по полю доступности загрузки.
+- [Jamendo Tracks API](https://developer.jamendo.com/v3.0/tracks) — поле `audiodownload_allowed` обязательно учитывается.
+- [Deezer API](https://developers.deezer.com/api) — поиск и preview URL.
+- [iTunes Search API](https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/iTuneSearchAPI/) — поиск и preview URL.
+- [Telegram Mini Apps](https://core.telegram.org/bots/webapps) — запуск приложения внутри Telegram и проверка initData.
 
 ## Безопасность
 
-- Никогда не добавляйте Telegram-токен или `WEBHOOK_SECRET` в GitHub.
-- Не публикуйте URL или команды настройки, если в них присутствует секрет.
-- Если токен Telegram утёк, отзовите его через BotFather и обновите Secret `BOT_TOKEN` в Cloudflare.
+- Не помещайте `BOT_TOKEN`, `WEBHOOK_SECRET` или Jamendo credentials в файлы фронтенда или GitHub.
+- Доступ к админ-API ограничен Telegram ID владельца и валидной подписью initData.
+- Если Telegram bot token утёк, отзовите его через @BotFather и обновите Cloudflare Secret.
