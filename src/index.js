@@ -120,28 +120,32 @@ async function searchAll(query, env) {
   return { tracks: unique.slice(0, 28), sources };
 }
 async function discoverFeed(env) {
-  const feedUrl="https://itunes.apple.com/ru/rss/topsongs/limit=40/json";
-  const feedResponse=await fetch(feedUrl,{headers:{"accept":"application/json"},signal:AbortSignal.timeout(10000)});
-  if(!feedResponse.ok)throw new Error("Charts unavailable");
-  const feed=await feedResponse.json();
-  const entries=feed.feed?.entry||[];
-  const chartSeeds=entries.map(e=>({artist:e["im:artist"]?.label||"",title:e["im:name"]?.label||"",picture:(e["im:image"]||[]).slice(-1)[0]?.label||""})).filter(x=>x.artist&&x.title);
-  const artistNames=[...new Set(chartSeeds.map(x=>x.artist))].slice(0,12);
+  const markets=["ru","kz","ua","by"];
+  const feeds=await Promise.allSettled(markets.map(async market=>{
+    const r=await fetch("https://itunes.apple.com/"+market+"/rss/topsongs/limit=40/json",{headers:{"accept":"application/json"},signal:AbortSignal.timeout(10000)});
+    if(!r.ok)throw new Error("Chart unavailable: "+market);
+    const d=await r.json();
+    return (d.feed?.entry||[]).map(e=>({artist:e["im:artist"]?.label||"",title:e["im:name"]?.label||"",picture:(e["im:image"]||[]).slice(-1)[0]?.label||"",market}));
+  }));
+  const chartSeeds=[];for(const feed of feeds)if(feed.status==="fulfilled")chartSeeds.push(...feed.value);
+  if(!chartSeeds.length)return json({artists:[],tracks:[],market:"CIS"});
+  const counts=new Map();for(const s of chartSeeds){const k=s.artist.trim();if(k)counts.set(k,(counts.get(k)||0)+1);}
+  const artistNames=[...counts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,12).map(x=>x[0]);
   const artistResults=await Promise.allSettled(artistNames.map(async name=>{
     const u=new URL("https://api.deezer.com/search/artist");u.searchParams.set("q",name);u.searchParams.set("limit","1");
     const r=await fetch(u,{signal:AbortSignal.timeout(8000)});if(!r.ok)return {name,picture:""};
-    const d=await r.json();const a=d.data?.[0];return {name:a?.name||name,picture:a?.picture_medium||""};
+    const d=await r.json();const artist=d.data?.[0];return {name:artist?.name||name,picture:artist?.picture_medium||""};
   }));
   const artists=artistResults.filter(x=>x.status==="fulfilled").map(x=>x.value).slice(0,12);
-  const queries=[...new Set(chartSeeds.slice(0,7).map(x=>x.artist))].slice(0,7);
+  const queries=artistNames.slice(0,8);
   const batches=await Promise.allSettled(queries.map(q=>searchAll(q,env)));
-  const all=[];for(const b of batches)if(b.status==="fulfilled")all.push(...b.value.tracks);
-  const seedArtists=new Set(queries.map(x=>x.toLowerCase()));
+  const all=[];for(const batch of batches)if(batch.status==="fulfilled")all.push(...batch.value.tracks);
+  const popularity=new Map(artistNames.map((name,i)=>[name.toLowerCase(),artistNames.length-i]));
   const seen=new Set();
-  const tracks=all.filter(t=>t.stream).map(t=>({...t,_rank:(seedArtists.has((t.artist||"").toLowerCase())?100:0)+(t.source==="Audius"?5:0)}))
+  const tracks=all.filter(t=>t.stream).map(t=>({...t,_rank:(popularity.get((t.artist||"").toLowerCase())||0)*20+(t.source==="Audius"?5:0)}))
     .filter(t=>{const k=(t.title+"|"+t.artist).toLowerCase();if(seen.has(k))return false;seen.add(k);return true})
     .sort((a,b)=>b._rank-a._rank).slice(0,30).map(({_rank,...t})=>t);
-  return json({artists,tracks,market:"RU"});
+  return json({artists,tracks,market:"CIS",markets:feeds.map((x,i)=>x.status==="fulfilled"?markets[i]:null).filter(Boolean)});
 }
 async function buildWave(request, env) {
   let seeds=[];
