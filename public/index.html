@@ -1,0 +1,23 @@
+<!doctype html>
+<html lang="ru">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<meta name="theme-color" content="#10091f"><title>KaylsMusic</title>
+<link rel="stylesheet" href="/style.css">
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+</head>
+<body>
+<div class="glow glow-a"></div><div class="glow glow-b"></div>
+<main class="shell">
+<header class="top"><div class="brand"><div class="brand-icon">♫</div><div><b>KaylsMusic</b><small>твой звук · твой ритм</small></div></div><button id="adminOpen" class="icon-btn" aria-label="Админ-панель" hidden>⚙</button></header>
+<section class="hero"><div class="eyebrow">MUSIC DISCOVERY</div><h1>Найди свой<br><span>новый звук</span></h1><p>Ищи сразу в нескольких музыкальных каталогах.</p></section>
+<form id="searchForm" class="search"><span>⌕</span><input id="query" autocomplete="off" placeholder="Трек или исполнитель..." minlength="2"><button type="submit">Найти</button></form>
+<div class="filters"><span class="filter active">Все каталоги</span><span class="filter">Audius</span><span class="filter">Jamendo</span><span class="filter">Deezer</span><span class="filter">iTunes</span></div>
+<section class="results-head"><div><h2>Результаты</h2><p id="status">Начни с поиска любимого трека</p></div><span class="count" id="count"></span></section>
+<section id="results" class="results"><div class="empty"><div class="empty-note">♫</div><b>Музыка начинается здесь</b><span>Введи название песни или имя артиста</span></div></section>
+<section id="adminPanel" class="admin-panel" hidden><div class="admin-title"><div><span class="eyebrow">OWNER AREA</span><h2>Панель владельца</h2></div><button id="adminClose" class="icon-btn">✕</button></div><div id="adminData" class="admin-grid"></div><p class="admin-note">Панель доступна только владельцу бота.</p></section>
+<footer>KaylsMusic <span>•</span> Музыка объединяет</footer>
+</main>
+<div class="player" id="player" hidden><img id="playerArt" src="" alt=""><div class="player-meta"><b id="playerTitle">—</b><span id="playerArtist">—</span></div><button id="playPause" class="play-btn">Ⅱ</button><audio id="audio" preload="none"></audio></div>
+<script src="/app.js"></script>
+</body></html>
