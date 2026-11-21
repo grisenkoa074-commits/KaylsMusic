@@ -369,7 +369,7 @@ export default {
     }
     if (request.method === "POST" && url.pathname === "/webhook") {
       if (request.headers.get("x-telegram-bot-api-secret-token") !== env.WEBHOOK_SECRET) return json({ ok: false }, 401);
-      try { const update = await request.json(); if (update.message) await replyToMessage(env, update.message, url.origin); return json({ ok: true }); }
+      try { const update = await request.json(); if (update.message) { await telegram(env, "setChatMenuButton", { menu_button: { type: "web_app", text: "Kayl`s Music", web_app: { url: url.origin } } }); await replyToMessage(env, update.message, url.origin); } return json({ ok: true }); }
       catch (e) { console.error("Webhook error", e); return json({ ok: false }, 500); }
     }
     if (url.pathname.startsWith("/api/")) {
