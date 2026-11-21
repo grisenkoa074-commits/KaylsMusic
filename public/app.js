@@ -11,53 +11,6 @@ function scheduleCloudSave(){clearTimeout(cloudTimer);cloudTimer=setTimeout(asyn
 function setAccountStatus(value){const el=$("accountStatus");if(el)el.textContent=value;}
 async function loadAccount(){if(!initData){setAccountStatus("Открой приложение через Telegram для синхронизации.");return;}try{const r=await fetch("/api/me",{headers:{"x-telegram-init-data":initData}}),d=await r.json();if(!r.ok){setAccountStatus(r.status===503?"Нужно подключить Cloudflare KV для синхронизации.":"Не удалось подтвердить аккаунт Telegram.");return;}const localSaved=saved,localHistory=history;saved=Array.isArray(d.data?.saved)?d.data.saved:[];saved=[...saved,...localSaved.filter(t=>!saved.some(x=>key(x)===key(t)))];history=Array.isArray(d.data?.history)?d.data.history:[];history=[...history,...localHistory.filter(t=>!history.some(x=>key(x)===key(t)))].slice(0,100);disliked=Array.isArray(d.data?.disliked)?d.data.disliked:[];cloudReady=true;persist(false);scheduleCloudSave();renderRecent();if(!$("libraryView").hidden)render($("libraryResults"),saved);setAccountStatus("Синхронизация включена · "+(d.user?.first_name||"Telegram"));}catch{setAccountStatus("Нет связи с сервером синхронизации.");}}
 
-function openYandexCatalog(query){
- const q=String(query??$("yandexQuery")?.value??$("query")?.value??$("query2")?.value??"").trim();
- if(!q){$("query")?.focus();return;}
- if($("yandexQuery"))$("yandexQuery").value=q;
- const url="https://music.yandex.ru/search?text="+encodeURIComponent(q);
- if(tg?.openLink)tg.openLink(url);else window.open(url,"_blank","noopener");
-}
-function parseYandexEmbed(raw){
- let value=String(raw||"").trim();
- const match=value.match(/https?:\/\/music\.yandex\.(?:ru|com|kz|by)\/iframe\/[^\s"'<>]*/i);
- if(match)value=match[0];
- if(value.startsWith("<")) {
-  const src=value.match(/src\s*=\s*["']([^"']+)["']/i);
-  if(!src)throw Error("Не удалось найти ссылку в HTML-коде.");
-  value=src[1];
- }
- let u;try{u=new URL(value)}catch{throw Error("Вставь корректную ссылку Яндекс Музыки или HTML-код плеера.");}
- if(!["music.yandex.ru","music.yandex.com","music.yandex.kz","music.yandex.by"].includes(u.hostname))throw Error("Разрешены только ссылки music.yandex.");
- if(u.pathname.startsWith("/iframe/")){
-  const hash=u.hash.replace(/^#\/?/,"");
-  if(!/^(track|album|playlist)\/[A-Za-z0-9_-]+(?:\/[A-Za-z0-9_-]+)?$/.test(hash))throw Error("В ссылке не найден поддерживаемый трек, альбом или плейлист.");
-  return "https://music.yandex.ru/iframe/#"+hash;
- }
- const albumTrack=u.pathname.match(/^\/album\/(\d+)\/track\/(\d+)/);
- if(albumTrack)return "https://music.yandex.ru/iframe/#track/"+albumTrack[1]+"/"+albumTrack[2];
- const album=u.pathname.match(/^\/album\/(\d+)/);
- if(album)return "https://music.yandex.ru/iframe/#album/"+album[1];
- throw Error("Открой в Яндекс Музыке «Поделиться» → «HTML-код» и вставь полученную ссылку.");
-}
-function loadYandexEmbed(){
- const status=$("yandexStatus"),target=$("yandexEmbed");
- try{
-  const src=parseYandexEmbed($("yandexLink").value);
-  const frame=document.createElement("iframe");
-  frame.src=src;frame.title="Официальный плеер Яндекс Музыки";
-  frame.allow="autoplay; encrypted-media; fullscreen";
-  frame.allowFullscreen=true;frame.loading="lazy";
-  frame.referrerPolicy="no-referrer-when-downgrade";
-  target.replaceChildren(frame);
-  status.textContent="Плеер загружен с music.yandex.ru. Управление и воспроизведение выполняет Яндекс.";
- }catch(e){status.textContent=e.message;}
-}
-$("yandexSearch").onclick=()=>openYandexCatalog($("yandexQuery").value);
-$("yandexQuery").onkeydown=e=>{if(e.key==="Enter")openYandexCatalog($("yandexQuery").value)};
-$("yandexLoad").onclick=loadYandexEmbed;
-$("yandexLink").onkeydown=e=>{if(e.key==="Enter")loadYandexEmbed()};
-
 function switchView(id){
  const views=[...document.querySelectorAll(".view")];views.forEach(v=>{v.hidden=v.id!==id;v.classList.remove("view-enter")});
  document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view===id));$("adminPanel").hidden=true;
@@ -79,8 +32,22 @@ function filtered(){return activeSource==="all"?results:results.filter(t=>t.sour
 let searchController=null;
 async function search(q,target){
  if(!q||q.trim().length<2)return;
- openYandexCatalog(q);
- if(target)target.innerHTML='<div class="hint">Открываем результаты поиска. После выбора трека используй «Поделиться» → «HTML-код», чтобы добавить официальный плеер сюда.</div>';
+ const seq=++searchSequence;
+ if(target)target.innerHTML='<div class="hint">Ищем полные версии треков…</div>';
+ try{
+  const r=await fetch("/api/search?q="+encodeURIComponent(q.trim()));
+  const d=await r.json();
+  if(!r.ok)throw Error(d.error||"Не удалось выполнить поиск");
+  if(seq!==searchSequence)return;
+  results=(d.tracks||[]).filter(t=>t.stream&&["Audius","Jamendo"].includes(t.source));
+  activeSource="all";
+  document.querySelectorAll(".source").forEach(b=>b.classList.toggle("active",b.dataset.source==="all"));
+  if(target){
+   if(results.length)render(target,filtered());
+   else target.innerHTML='<div class="hint">Полные версии пока не найдены. Попробуй другое название или имя исполнителя.</div>';
+  }
+  $("searchStatus").textContent=results.length?results.length+" полных версий":"";
+ }catch(e){if(target)target.innerHTML='<div class="hint">'+esc(e.message)+'</div>'}
 }
 $("openSearch").onclick=()=>{$("searchPanel").hidden=false;$("query").focus();$("searchPanel").scrollIntoView({behavior:"smooth",block:"start"})};
 $("closeSearch").onclick=()=>{$("searchPanel").hidden=true;$("query").value="";$("homeResults").innerHTML='<div class="hint">Введи название трека или исполнителя.</div>'};
@@ -88,7 +55,7 @@ let searchDebounce=null,searchSequence=0;
 function liveSearch(value,target){
  clearTimeout(searchDebounce);searchSequence++;
  const q=value.trim();
- target.innerHTML=q.length<2?'<div class="hint">Введи хотя бы 2 символа для поиска.</div>':'<div class="hint">Нажми Enter или кнопку поиска, чтобы открыть результаты.</div>';
+ target.innerHTML=q.length<2?'<div class="hint">Введи хотя бы 2 символа для поиска.</div>':'<div class="hint">Нажми Enter или кнопку поиска, чтобы найти полные версии.</div>';
 }
 $("query").oninput=e=>liveSearch(e.target.value,$("homeResults"));
 $("query").onkeydown=e=>{if(e.key==="Enter"){clearTimeout(searchDebounce);searchSequence++;search(e.target.value,$("homeResults"));}};
@@ -97,7 +64,7 @@ if(query2){query2.oninput=e=>liveSearch(e.target.value,$("searchResults"));query
 $("searchButton2").onclick=()=>{clearTimeout(searchDebounce);searchSequence++;search(query2?.value||"",$("searchResults"));};
 function updateMediaSession(){if(!("mediaSession" in navigator)||!current)return;try{navigator.mediaSession.metadata=new MediaMetadata({title:current.title||"Kayl`s Music",artist:current.artist||"",album:"Kayl`s Music",artwork:current.artwork?[{src:current.artwork,sizes:"512x512",type:"image/jpeg"}]:[]});navigator.mediaSession.playbackState=audio.paused?"paused":"playing"}catch{}}
 function setupMediaSession(){if(!("mediaSession" in navigator))return;const actions={play:()=>audio.play().catch(()=>{}),pause:()=>audio.pause(),previoustrack:prev,nexttrack:next,seekbackward:d=>{audio.currentTime=Math.max(0,audio.currentTime-(d.seekOffset||10))},seekforward:d=>{audio.currentTime=Math.min(audio.duration||Infinity,audio.currentTime+(d.seekOffset||10))},seekto:d=>{if(Number.isFinite(audio.duration)&&Number.isFinite(d.seekTime))audio.currentTime=d.seekTime}};for(const [name,fn] of Object.entries(actions)){try{navigator.mediaSession.setActionHandler(name,fn)}catch{}}}
-async function play(t,list){if(!t.stream){tg?.showAlert?.("Для этого трека нет доступного предпрослушивания.");return}queue=list||queue;qi=queue.findIndex(x=>key(x)===key(t));current=t;$("playerTitle").textContent=t.title;$("playerArtist").textContent=t.artist;$("playerArt").src=t.artwork||"";$("fpArt").src=t.artwork||"";$("fpTitle").textContent=t.title;$("fpArtist").textContent=t.artist;$("fpContext").textContent="Твоя музыка";$("playerHeart").textContent=has(t)?"♥":"♡";$("fpLike").textContent=has(t)?"♥":"♡";$("player").hidden=false;audio.src=t.stream;setupMediaSession();updateMediaSession();try{await audio.play();setPlaying(true);updateMediaSession()}catch{setPlaying(false);updateMediaSession()}history=[t,...history.filter(x=>key(x)!==key(t))].slice(0,100);persist();renderRecent();renderQueue()}
+async function play(t,list){if(!t.stream){tg?.showAlert?.("Для этого трека нет доступной полной версии.");return}queue=list||queue;qi=queue.findIndex(x=>key(x)===key(t));current=t;$("playerTitle").textContent=t.title;$("playerArtist").textContent=t.artist;$("playerArt").src=t.artwork||"";$("fpArt").src=t.artwork||"";$("fpTitle").textContent=t.title;$("fpArtist").textContent=t.artist;$("fpContext").textContent="Твоя музыка";$("playerHeart").textContent=has(t)?"♥":"♡";$("fpLike").textContent=has(t)?"♥":"♡";$("player").hidden=false;audio.src=t.stream;setupMediaSession();updateMediaSession();try{await audio.play();setPlaying(true);updateMediaSession()}catch{setPlaying(false);updateMediaSession()}history=[t,...history.filter(x=>key(x)!==key(t))].slice(0,100);persist();renderRecent();renderQueue()}
 function setPlaying(on){$("playPause").textContent=on?"Ⅱ":"▶";$("fpPlay").textContent=on?"Ⅱ":"▶"}
 function openFullPlayer(){$("fullPlayer").hidden=false;document.body.classList.add("player-open");$("fpLike").textContent=current&&has(current)?"♥":"♡";renderQueue()}
 function closeFullPlayer(){$("fullPlayer").hidden=true;document.body.classList.remove("player-open");$("queuePanel").hidden=true}
