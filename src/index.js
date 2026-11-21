@@ -1,7 +1,7 @@
 const ADMIN_ID = "8179633402";
 const TELEGRAM_API = "https://api.telegram.org";
 const AUDIUS_API = "https://discoveryprovider.audius.co/v1";
-const APP_NAME = "KaylsMusic";
+const APP_NAME = "Kayl`s Music";
 const MAX_RESULTS = 8;
 const WAVE_LIMIT = 60;
 
@@ -239,9 +239,54 @@ async function verifyDownload(source, id, env) {
   }
   return null;
 }
+
+async function botAvatarApi(env) {
+  if (!env.BOT_TOKEN) return new Response(null,{status:404});
+  try {
+    const me = await telegram(env,"getMe",{});
+    const photos = await telegram(env,"getUserProfilePhotos",{user_id:me.id,limit:1});
+    const sizes = photos.photos?.[0] || [];
+    const photo = sizes.sort((a,b)=>(b.file_size||0)-(a.file_size||0))[0];
+    if (!photo?.file_id) return new Response(null,{status:404});
+    const file = await telegram(env,"getFile",{file_id:photo.file_id});
+    if (!file.file_path) return new Response(null,{status:404});
+    const image = await fetch(TELEGRAM_API+"/file/bot"+env.BOT_TOKEN+"/"+file.file_path);
+    if (!image.ok) return new Response(null,{status:404});
+    return new Response(image.body,{headers:{"content-type":image.headers.get("content-type")||"image/jpeg","cache-control":"public, max-age=60"}});
+  } catch { return new Response(null,{status:404}); }
+}
+async function sendLicensedAudio(request,env) {
+  const user=await requireUser(request,env);
+  if(!user?.id)return json({error:"Откройте приложение через Telegram"},401);
+  let body;try{body=await request.json()}catch{return json({error:"Некорректный запрос"},400)}
+  const source=String(body.source||"").toLowerCase(),id=String(body.id||"").slice(0,120);
+  if(!id||!["audius","jamendo"].includes(source))return json({error:"Этот источник не поддерживает разрешённую загрузку."},400);
+  const target=await verifyDownload(source,id,env);
+  if(!target)return json({error:"Правообладатель не разрешил скачивание этого трека."},403);
+  const upstream=await fetch(target,{redirect:"follow",signal:AbortSignal.timeout(25000)});
+  if(!upstream.ok)return json({error:"Не удалось получить аудиофайл от источника."},502);
+  const type=(upstream.headers.get("content-type")||"").toLowerCase();
+  const declared=Number(upstream.headers.get("content-length")||0);
+  if(declared>50*1024*1024)return json({error:"Файл больше лимита Telegram 50 МБ."},413);
+  if(type.includes("text/html")||type.includes("application/json"))return json({error:"Источник вернул не аудиофайл."},415);
+  const bytes=await upstream.arrayBuffer();
+  if(bytes.byteLength>50*1024*1024)return json({error:"Файл больше лимита Telegram 50 МБ."},413);
+  if(bytes.byteLength<1024)return json({error:"Аудиофайл пустой или повреждён."},415);
+  const form=new FormData();
+  const safe=(v,fallback)=>String(v||fallback).replace(/[\\\\/:*?"<>|]/g," ").slice(0,100);
+  form.set("chat_id",String(user.id));
+  form.set("title",safe(body.title,"Track"));
+  form.set("performer",safe(body.artist,"Unknown artist"));
+  form.set("audio",new Blob([bytes],{type:"audio/mpeg"}),safe(body.title,"track")+".mp3");
+  const sent=await fetch(TELEGRAM_API+"/bot"+env.BOT_TOKEN+"/sendAudio",{method:"POST",body:form});
+  const result=await sent.json();
+  if(!sent.ok||!result.ok)return json({error:result.description||"Telegram не смог отправить MP3."},502);
+  return json({ok:true,message_id:result.result?.message_id});
+}
+
 async function accountApi(request, env) {
   const user = await requireUser(request, env);
-  if (!user?.id) return json({ error: "Откройте KaylsMusic внутри Telegram" }, 401);
+  if (!user?.id) return json({ error: "Откройте Kayl`s Music внутри Telegram" }, 401);
   if (!env.USER_DATA) return json({ error: "Cloudflare KV не подключён. Создайте KV namespace и привяжите его как USER_DATA." }, 503);
   const key = "user:" + String(user.id);
   if (request.method === "GET") {
@@ -263,6 +308,8 @@ async function accountApi(request, env) {
   return json({ error: "Method not allowed" }, 405);
 }
 async function handleApi(request, env, url) {
+  if (request.method === "GET" && url.pathname === "/api/bot-avatar") return botAvatarApi(env);
+  if (request.method === "POST" && url.pathname === "/api/send-audio") return sendLicensedAudio(request,env);
   if ((request.method === "GET" || request.method === "PUT") && url.pathname === "/api/me") return accountApi(request, env);
   if (request.method === "GET" && url.pathname === "/api/discover") return discoverFeed(env);
   if (request.method === "GET" && url.pathname === "/api/wave") return buildWave(request, env);
@@ -301,7 +348,7 @@ async function replyToMessage(env, message, origin) {
   if (!chatId) return;
   const keyboard = { inline_keyboard: [[{ text: "🎧 Открыть KaylsMusic", web_app: { url: origin } }]] };
   if (/^\/(start|help)(?:@\w+)?/i.test(text)) {
-    await telegram(env, "sendMessage", { chat_id: chatId, text: "Добро пожаловать в KaylsMusic! Ищи музыку сразу в нескольких каталогах, слушай и скачивай треки, доступные для загрузки.", reply_markup: keyboard });
+    await telegram(env, "sendMessage", { chat_id: chatId, text: "Добро пожаловать в Kayl`s Music! Ищи музыку сразу в нескольких каталогах, слушай и скачивай треки, доступные для загрузки.", reply_markup: keyboard });
   } else if (text && !text.startsWith("/")) {
     await telegram(env, "sendMessage", { chat_id: chatId, text: "Открой KaylsMusic, чтобы увидеть результаты из нескольких каталогов и слушать музыку прямо в приложении.", reply_markup: keyboard });
   }
@@ -316,7 +363,7 @@ export default {
       if (!env.BOT_TOKEN || !env.WEBHOOK_SECRET) return json({ ok: false, error: "Missing Worker secrets" }, 500);
       if (request.headers.get("authorization") !== `Bearer ${env.WEBHOOK_SECRET}`) return json({ ok: false, error: "Unauthorized" }, 401);
       const webhook = await telegram(env, "setWebhook", { url: `${url.origin}/webhook`, secret_token: env.WEBHOOK_SECRET, allowed_updates: ["message"] });
-      await telegram(env, "setChatMenuButton", { menu_button: { type: "web_app", text: "KaylsMusic", web_app: { url: url.origin } } });
+      await telegram(env, "setChatMenuButton", { menu_button: { type: "web_app", text: "Kayl`s Music", web_app: { url: url.origin } } });
       return json({ ok: true, webhook_set: Boolean(webhook), mini_app_menu_set: true, jamendo_configured: Boolean(env.JAMENDO_CLIENT_ID) });
     }
     if (request.method === "POST" && url.pathname === "/webhook") {
