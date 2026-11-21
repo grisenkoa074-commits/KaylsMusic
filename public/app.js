@@ -29,6 +29,11 @@ function toggleSaved(t){saved=has(t)?saved.filter(x=>key(x)!==key(t)):[t,...save
 function refreshVisible(){if(!$("libraryView").hidden)render($("libraryResults"),saved);if(current)$("playerHeart").textContent=has(current)?"♥":"♡"}
 function renderRecent(){render($("recentList"),history.slice(0,5))}
 function filtered(){return activeSource==="all"?results:results.filter(t=>t.source===activeSource)}
+document.querySelectorAll(".source").forEach(b=>b.onclick=()=>{
+ activeSource=b.dataset.source||"all";
+ document.querySelectorAll(".source").forEach(x=>x.classList.toggle("active",x===b));
+ if(!$("searchView").hidden)render($("searchResults"),filtered());
+});
 let searchController=null;
 async function search(q,target){
  if(!q||q.trim().length<2)return;
