@@ -50,6 +50,7 @@ async function audiusSearch(query) {
   return (d.data || []).map(t => ({
     id: String(t.id), source: "Audius", title: t.title, artist: t.user?.name || "Unknown artist",
     duration: duration(t.duration), artwork: t.artwork?.["480x480"] || t.artwork?.["150x150"] || "",
+    genres: [t.genre].filter(Boolean), mood: t.mood || "", tags: [],
     stream: `/api/audio?source=audius&id=${encodeURIComponent(t.id)}`,
     downloadable: Boolean(t.is_downloadable ?? t.downloadable), download: Boolean(t.is_downloadable ?? t.downloadable),
     permalink: t.permalink ? `https://audius.co${t.permalink}` : "https://audius.co"
@@ -58,13 +59,14 @@ async function audiusSearch(query) {
 async function jamendoSearch(query, env) {
   if (!env.JAMENDO_CLIENT_ID) return [];
   const u = new URL("https://api.jamendo.com/v3.0/tracks/");
-  Object.entries({ client_id: env.JAMENDO_CLIENT_ID, format: "json", limit: "8", search: query, include: "licenses", audioformat: "mp32", audiodlformat: "mp32" }).forEach(([k,v]) => u.searchParams.set(k,v));
+  Object.entries({ client_id: env.JAMENDO_CLIENT_ID, format: "json", limit: "8", search: query, include: "licenses+musicinfo", audioformat: "mp32", audiodlformat: "mp32" }).forEach(([k,v]) => u.searchParams.set(k,v));
   const r = await fetch(u, { signal: AbortSignal.timeout(12000) });
   if (!r.ok) throw new Error("Jamendo unavailable");
   const d = await r.json();
   return (d.results || []).map(t => ({
     id: String(t.id), source: "Jamendo", title: t.name, artist: t.artist_name || "Unknown artist",
     duration: duration(t.duration), artwork: t.image || t.album_image || "",
+    genres: t.musicinfo?.tags?.genres || [], mood: "", tags: [...(t.musicinfo?.tags?.vartags || []), ...(t.musicinfo?.tags?.instruments || [])],
     stream: t.audio || "", downloadable: Boolean(t.audiodownload_allowed && t.audiodownload),
     download: Boolean(t.audiodownload_allowed && t.audiodownload), downloadUrl: t.audiodownload || "",
     permalink: t.shareurl || "https://jamendo.com", license: t.license_ccurl || ""
@@ -79,6 +81,7 @@ async function deezerSearch(query) {
   return (d.data || []).map(t => ({
     id: String(t.id), source: "Deezer", title: t.title, artist: t.artist?.name || "Unknown artist",
     duration: duration(t.duration), artwork: t.album?.cover_medium || "",
+    genres: [], mood: "", tags: [],
     stream: t.preview || "", downloadable: false, download: false, permalink: t.link || "https://deezer.com"
   }));
 }
@@ -91,6 +94,7 @@ async function itunesSearch(query) {
   return (d.results || []).map(t => ({
     id: String(t.trackId), source: "iTunes", title: t.trackName, artist: t.artistName,
     duration: duration((t.trackTimeMillis || 0) / 1000), artwork: t.artworkUrl100 || "",
+    genres: t.primaryGenreName ? [t.primaryGenreName] : [], mood: "", tags: [],
     stream: t.previewUrl || "", downloadable: false, download: false, permalink: t.trackViewUrl || "https://music.apple.com"
   }));
 }
@@ -120,18 +124,26 @@ async function buildWave(request, env) {
   try { seeds=JSON.parse(new URL(request.url).searchParams.get("seeds")||"[]"); } catch {}
   if (!Array.isArray(seeds) || !seeds.length) return json({tracks:[]});
   seeds=seeds.filter(s=>s&&typeof s.artist==="string"&&typeof s.title==="string").slice(0,12);
-  const artists=[...new Set(seeds.map(s=>s.artist.trim()).filter(a=>a&&a!=="Unknown artist"))].slice(0,5);
-  const queries=[...artists];
-  for(const s of seeds.slice(0,3)){
-    const q=[s.artist,s.title].filter(Boolean).join(" ").trim();
-    if(q.length>2&&!queries.some(x=>x.toLowerCase()===q.toLowerCase()))queries.push(q);
+  const norm=v=>String(v||"").toLowerCase().trim();
+  const artists=[...new Set(seeds.map(s=>s.artist.trim()).filter(a=>a&&a!=="Unknown artist"))].slice(0,4);
+  const genreCounts=new Map();
+  for(const s of seeds)for(const g of [...(Array.isArray(s.genres)?s.genres:[]),...(Array.isArray(s.tags)?s.tags:[])]) {
+    const value=String(g||"").trim(); if(value.length>1&&value.length<40)genreCounts.set(value,(genreCounts.get(value)||0)+1);
   }
-  const batches=await Promise.allSettled(queries.slice(0,7).map(q=>searchAll(q,env)));
+  const topGenres=[...genreCounts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,4).map(x=>x[0]);
+  const moods=[...new Set(seeds.map(s=>String(s.mood||"").trim()).filter(Boolean))].slice(0,2);
+  const queries=[...artists,...topGenres,...moods];
+  for(const s of seeds.slice(0,2)){
+    const q=[s.artist,s.title].filter(Boolean).join(" ").trim();
+    if(q.length>2&&!queries.some(x=>norm(x)===norm(q)))queries.push(q);
+  }
+  const batches=await Promise.allSettled(queries.slice(0,8).map(q=>searchAll(q,env)));
   const candidates=[];
   for(const batch of batches)if(batch.status==="fulfilled")candidates.push(...(batch.value.tracks||[]));
   const seedKeys=new Set(seeds.map(s=>(s.source||"")+"|"+String(s.id||"")));
-  const seedArtists=new Map();
-  for(const s of seeds){const k=(s.artist||"").toLowerCase();if(k)seedArtists.set(k,(seedArtists.get(k)||0)+1);}
+  const seedArtists=new Set(seeds.map(s=>norm(s.artist)).filter(Boolean));
+  const seedGenres=new Set([...genreCounts.keys()].map(norm));
+  const seedMoods=new Set(moods.map(norm));
   const seen=new Set();
   const tracks=candidates.filter(t=>{
     if(!t.stream)return false;
@@ -139,12 +151,15 @@ async function buildWave(request, env) {
     if(seedKeys.has(k)||seen.has(k))return false;
     seen.add(k);return true;
   }).map(t=>{
-    const artist=(t.artist||"").toLowerCase();
-    const exact=seedArtists.has(artist);
-    const related=artists.some(a=>artist.includes(a.toLowerCase())||a.toLowerCase().includes(artist));
-    return {...t,_rank:(exact?100:0)+(related?30:0)+(t.source==="Audius"?8:0)+Math.random()};
+    const artist=norm(t.artist);
+    const genres=(t.genres||[]).map(norm),tags=(t.tags||[]).map(norm),mood=norm(t.mood);
+    const genreHits=genres.filter(g=>seedGenres.has(g)).length;
+    const tagHits=tags.filter(g=>seedGenres.has(g)).length;
+    const moodHit=mood&&seedMoods.has(mood)?1:0;
+    const sameArtist=seedArtists.has(artist);
+    return {...t,_rank:(sameArtist?100:0)+(genreHits*24)+(tagHits*8)+(moodHit*12)+(t.source==="Audius"?4:0)+Math.random()};
   }).sort((a,b)=>b._rank-a._rank).slice(0,WAVE_LIMIT).map(({_rank,...t})=>t);
-  return json({tracks,seedCount:seeds.length,queryCount:queries.length});
+  return json({tracks,seedCount:seeds.length,genres:topGenres,moods,queryCount:queries.length});
 }
 async function verifyDownload(source, id, env) {
   if (source === "audius") {
