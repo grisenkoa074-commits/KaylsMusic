@@ -1,145 +1,108 @@
 # KaylsMusic Telegram Bot
 
-Telegram-бот для поиска музыки по названию трека или исполнителю.
+Telegram-бот для поиска музыки по названию трека или исполнителю. Развёртывание — Cloudflare Workers Free, без VPS и без банковской карты.
 
 ## Возможности
 
 - Поиск до 5 совпадений через Deezer.
-- Резервный поиск через iTunes, если Deezer недоступен или не вернул результатов.
-- Показывает название, исполнителя, длительность и ссылку на страницу трека.
-- Обрабатывает пустые запросы, таймауты и ошибки API.
-- Работает через Telegram long polling.
-- HTTP endpoint `/health` для проверки состояния при размещении на Render.
+- Автоматический переход на iTunes, если Deezer недоступен или не нашёл совпадений.
+- Название, исполнитель, длительность и кнопка-ссылка на страницу трека.
+- Команды `/start`, `/help`, `/search запрос`.
+- Telegram Webhook с секретной проверкой запроса.
+- HTTPS и health check по `/health`.
 
-## Требования
+## Бесплатный хостинг
 
-- Python 3.10+
-- Telegram Bot Token от [@BotFather](https://t.me/BotFather)
+Используется [Cloudflare Workers Free](https://www.cloudflare.com/developer-platform/workers/). Для работы бота не нужна постоянно запущенная виртуальная машина: Telegram отправляет обновления на Worker через HTTPS webhook.
 
-## Локальный запуск
+Бесплатный тариф на момент подготовки README включает до 100 000 запросов в сутки и 10 мс CPU на одно выполнение. Для обычного музыкального Telegram-бота этого достаточно с большим запасом. Лимиты и условия могут изменяться: [официальные лимиты](https://developers.cloudflare.com/workers/platform/limits/).
 
-1. Склонируйте репозиторий:
-   ```bash
-   git clone https://github.com/grisenkoa074-commits/KaylsMusic.git
-   cd KaylsMusic
-   ```
-2. Создайте виртуальное окружение и установите зависимости:
-   ```bash
-   python -m venv .venv
-   # Windows: .venv\\Scripts\\activate
-   # macOS/Linux:
-   source .venv/bin/activate
-   pip install -r requirements.txt
-   ```
-3. Скопируйте `.env.example` в `.env` и укажите токен:
-   ```env
-   TELEGRAM_BOT_TOKEN=your_telegram_bot_token
-   PORT=10000
-   ```
-4. Запустите:
-   ```bash
-   python bot.py
-   ```
+## Развёртывание — пошагово
 
-## Создание бота в Telegram
+### 1. Создайте Cloudflare аккаунт
 
-1. Откройте [@BotFather](https://t.me/BotFather).
-2. Отправьте команду `/newbot`.
-3. Задайте имя и username бота.
-4. Скопируйте выданный токен в локальный `.env` или в переменные окружения хостинга.
+1. Откройте [Cloudflare Sign Up](https://dash.cloudflare.com/sign-up).
+2. Зарегистрируйтесь на бесплатном тарифе. Для Workers Free банковская карта не требуется.
+3. Подтвердите email и войдите в панель Cloudflare.
 
-**Не публикуйте токен и не добавляйте его в Git.**
+### 2. Подключите GitHub
 
-## Размещение на Oracle Cloud Always Free (Ubuntu)
+1. Откройте Cloudflare Dashboard → **Workers & Pages**.
+2. Нажмите **Create application**.
+3. Выберите **GitHub** и разрешите Cloudflare доступ к репозиторию.
+4. Выберите `grisenkoa074-commits/KaylsMusic`.
+5. В настройках сборки оставьте корневую папку репозитория. Файл `wrangler.toml` уже содержит настройки Worker.
+6. Нажмите **Save and Deploy**.
 
-Для Telegram long polling нужен постоянно работающий процесс. На Oracle Cloud можно запустить бота на виртуальной машине и управлять им через systemd.
+Cloudflare создаст Worker и выдаст адрес примерно такого вида:
 
-### 1. Создайте виртуальную машину
+`https://kaylsmusic.<your-subdomain>.workers.dev`
 
-1. Зарегистрируйтесь в [Oracle Cloud Free Tier](https://www.oracle.com/cloud/free/).
-2. В консоли откройте **Compute → Instances → Create instance**.
-3. Выберите Ubuntu 22.04 или 24.04, образ для **aarch64 (ARM)** если создаёте Ampere A1.
-4. Для бесплатной конфигурации Ampere A1 используйте суммарно не более **2 OCPU и 12 GB RAM**. Также можно выбрать Always Free AMD Micro, если он доступен в вашем регионе.
-5. В разделе Networking выберите публичную подсеть и назначьте публичный IPv4.
-6. Добавьте свой SSH public key и сохраните private key в безопасном месте.
-7. Создайте экземпляр и дождитесь состояния **Running**. Если видите *Out of host capacity*, попробуйте позже или другой Availability Domain в домашнем регионе.
+Официальная инструкция: [Connect a Git repository](https://developers.cloudflare.com/workers/ci-cd/builds/).
 
-Always Free вычислительные ресурсы доступны в домашнем регионе аккаунта. Бесплатная квота Ampere A1 — 1 500 OCPU-часов и 9 000 GB-часов в месяц (эквивалент 2 OCPU и 12 GB RAM). Oracle может признать Always Free VM простаивающей и отозвать её, если за 7 дней CPU, сеть и (для A1) память остаются ниже установленных порогов. Условия и доступность проверяйте на официальной странице.
+### 3. Добавьте два секрета
 
-### 2. Подключитесь по SSH
+Откройте созданный Worker → **Settings → Variables and Secrets** (название раздела может немного отличаться) и добавьте два значения типа **Secret**:
 
-На своём компьютере откройте терминал и выполните команду, заменив путь к ключу и публичный IP:
+- `BOT_TOKEN` — токен от [@BotFather](https://t.me/BotFather).
+- `WEBHOOK_SECRET` — случайная строка из латинских букв, цифр, дефисов или подчёркиваний, длиной 32–64 символа. Например, можно сгенерировать её любым надёжным генератором паролей.
 
-```bash
-ssh -i ~/.ssh/oci_key ubuntu@YOUR_PUBLIC_IP
+Не используйте пример из документации как реальный секрет. Сохраните значение `WEBHOOK_SECRET`: оно понадобится один раз для подключения Telegram webhook.
+
+После добавления секретов выполните **Deploy** / **Save and deploy**, если панель попросит применить изменения.
+
+### 4. Подключите Telegram к Worker
+
+Откройте PowerShell на Windows или терминал на Mac/Linux и выполните запрос, заменив адрес Worker и значение секрета:
+
+**PowerShell (Windows):**
+
+```powershell
+$worker = "https://kaylsmusic.YOUR-SUBDOMAIN.workers.dev"
+$secret = "PASTE_THE_SAME_WEBHOOK_SECRET"
+Invoke-RestMethod -Method Post -Uri "$worker/setup" -Headers @{ Authorization = "Bearer $secret" }
 ```
 
-На Windows можно использовать PowerShell с OpenSSH. Если SSH не подключается, проверьте, что в Security List/Network Security Group разрешён входящий TCP порт 22 только с вашего IP-адреса.
-
-### 3. Скачайте проект и установите сервис
-
-На виртуальной машине выполните:
+**macOS / Linux:**
 
 ```bash
-sudo apt-get update
-sudo apt-get install -y git
-git clone https://github.com/grisenkoa074-commits/KaylsMusic.git
-cd KaylsMusic
-sudo bash deploy/oracle_setup.sh
+WORKER="https://kaylsmusic.YOUR-SUBDOMAIN.workers.dev"
+SECRET="PASTE_THE_SAME_WEBHOOK_SECRET"
+curl -X POST "$WORKER/setup" -H "Authorization: Bearer $SECRET"
 ```
 
-Скрипт установит Python и зависимости, создаст системного пользователя `kaylsmusic`, подготовит виртуальное окружение и установит службу systemd. Он не запускает бота до добавления токена.
+В ответе должно быть `"ok": true`. Этот защищённый запрос регистрирует webhook в Telegram. Не публикуйте секрет и не отправляйте его в чат.
 
-### 4. Добавьте токен Telegram и запустите бота
+### 5. Проверьте бота
+
+1. Откройте адрес Worker + `/health` в браузере. Должен появиться ответ `{"status":"ok","service":"KaylsMusic"}`.
+2. Откройте своего бота в Telegram.
+3. Отправьте `/start`.
+4. Попробуйте поиск: `Daft Punk One More Time`.
+
+## Обновление кода
+
+После подключения GitHub Cloudflare автоматически собирает и публикует изменения при каждом push в основную ветку. Секреты остаются в настройках Cloudflare и в GitHub не попадают.
+
+## Локальный Python-вариант
+
+Файл `bot.py` и `requirements.txt` сохранены для локального запуска через long polling:
 
 ```bash
-sudo nano /opt/kaylsmusic/.env
+python -m venv .venv
+# Windows: .venv\\Scripts\\activate
+# macOS/Linux:
+source .venv/bin/activate
+pip install -r requirements.txt
+cp .env.example .env
+# Укажите TELEGRAM_BOT_TOKEN в .env
+python bot.py
 ```
 
-Укажите свой токен:
+Cloudflare Worker использует реализацию из `src/index.js`; Python-версия не нужна для Cloudflare-деплоя.
 
-```env
-TELEGRAM_BOT_TOKEN=ВСТАВЬТЕ_ТОКЕН_ОТ_BOTFATHER
-PORT=10000
-LOG_LEVEL=INFO
-```
+## Безопасность
 
-Сохраните файл (в nano: Ctrl+O, Enter, Ctrl+X), затем выполните:
-
-```bash
-sudo chown kaylsmusic:kaylsmusic /opt/kaylsmusic/.env
-sudo chmod 600 /opt/kaylsmusic/.env
-sudo systemctl start kaylsmusic
-sudo systemctl status kaylsmusic
-```
-
-Проверить логи:
-
-```bash
-sudo journalctl -u kaylsmusic -f
-```
-
-Полезные команды:
-
-```bash
-sudo systemctl restart kaylsmusic
-sudo systemctl stop kaylsmusic
-sudo systemctl enable kaylsmusic
-``
-
-Служба автоматически запускается после перезагрузки VM и перезапускается при сбое. Входящий порт для Telegram-бота открывать не нужно: бот сам подключается к Telegram через исходящие соединения. HTTP health endpoint на порту `PORT` оставлен в приложении для локальной проверки, но для обычной работы бота его не требуется публиковать в интернет.
-
-**Безопасность:** никогда не коммитьте `.env`, Telegram-токен или приватный SSH-ключ в GitHub. Не открывайте SSH (порт 22) для всего интернета без необходимости.
-## Структура проекта
-
-- `bot.py` — Telegram-бот и интеграции поиска.
-- `requirements.txt` — зависимости Python.
-- `.env.example` — пример переменных окружения.
-- `.gitignore` — исключения Git.
-
-## Источники поиска
-
-- [Deezer API](https://developers.deezer.com/api)
-- [iTunes Search API](https://developer.apple.com/library/archive/documentation/AudioVideo/Conceptual/iTuneSearchAPI/)
-
-iTunes используется как резервный источник. Для iTunes кнопка ведёт на страницу трека (`trackViewUrl`), а не на preview-аудио.
+- Никогда не добавляйте Telegram-токен или `WEBHOOK_SECRET` в GitHub.
+- Не публикуйте URL или команды настройки, если в них присутствует секрет.
+- Если токен Telegram утёк, отзовите его через BotFather и обновите Secret `BOT_TOKEN` в Cloudflare.
