@@ -60,7 +60,7 @@ $("downloadButton").onclick=()=>{if(!current)return;if(!current.downloadable){tg
 $("startWave").onclick=()=>{if(current){saved=[current,...saved.filter(t=>key(t)!==key(current))];persist()}closeFullPlayer();switchView("waveView")};
 $("seekBar").oninput=e=>{if(Number.isFinite(audio.duration))audio.currentTime=audio.duration*(Number(e.target.value)/1000)};
 function next(){if(repeatOne&&current){play(current,queue);return}if(qi+1<queue.length)play(queue[++qi],queue);else setPlaying(false)}function prev(){if(audio.currentTime>3){audio.currentTime=0;return}if(qi>0)play(queue[--qi],queue)}
-$("nextTrack").onclick=next;$("prevTrack").onclick=prev;audio.onended=next;$("playerHeart").onclick=()=>current&&toggleSaved(current);
+$("nextTrack").onclick=next;audio.onended=next;$("playerHeart").onclick=()=>current&&toggleSaved(current);
 audio.ontimeupdate=()=>{if(audio.duration){const p=audio.currentTime/audio.duration*100;$("progressBar").style.width=p+"%";$("seekBar").value=Math.round(p*10);$("elapsedTime").textContent=fmtTime(audio.currentTime);$("totalTime").textContent="-"+fmtTime(audio.duration-audio.currentTime)}};audio.onplay=()=>setPlaying(true);audio.onpause=()=>setPlaying(false);
 function share(t){const u=new URL("/",location.origin);u.searchParams.set("track",JSON.stringify({id:t.id,source:t.source,title:t.title,artist:t.artist,artwork:t.artwork,stream:t.stream}));const url="https://t.me/share/url?url="+encodeURIComponent(u.href)+"&text="+encodeURIComponent(t.title+" — "+t.artist);if(tg?.openTelegramLink)tg.openTelegramLink(url);else if(navigator.share)navigator.share({title:t.title,url:u.href}).catch(()=>{});else navigator.clipboard?.writeText(u.href)}
 let waveTracks=[],waveLoading=false;
