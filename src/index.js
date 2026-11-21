@@ -128,7 +128,7 @@ async function discoverFeed(env) {
     return (d.feed?.entry||[]).map(e=>({artist:e["im:artist"]?.label||"",title:e["im:name"]?.label||"",picture:(e["im:image"]||[]).slice(-1)[0]?.label||"",market}));
   }));
   const chartSeeds=[];for(const feed of feeds)if(feed.status==="fulfilled")chartSeeds.push(...feed.value);
-  if(!chartSeeds.length)return json({artists:[],tracks:[],market:"CIS"});
+  if(!chartSeeds.length){for(const artist of ["Miyagi & Andy Panda","MACAN","JONY","Zivert","Скриптонит","Мот","ANNA ASTI","HammAli & Navai","Artik & Asti","Дора"])chartSeeds.push({artist,title:"",picture:"",market:"fallback"});}\n
   const counts=new Map();for(const s of chartSeeds){const k=s.artist.trim();if(k)counts.set(k,(counts.get(k)||0)+1);}
   const artistNames=[...counts.entries()].sort((a,b)=>b[1]-a[1]).slice(0,12).map(x=>x[0]);
   const artistResults=await Promise.allSettled(artistNames.map(async name=>{
@@ -145,7 +145,7 @@ async function discoverFeed(env) {
   const tracks=all.filter(t=>t.stream).map(t=>({...t,_rank:(popularity.get((t.artist||"").toLowerCase())||0)*20+(t.source==="Audius"?5:0)}))
     .filter(t=>{const k=(t.title+"|"+t.artist).toLowerCase();if(seen.has(k))return false;seen.add(k);return true})
     .sort((a,b)=>b._rank-a._rank).slice(0,30).map(({_rank,...t})=>t);
-  return json({artists,tracks,market:"CIS",markets:feeds.map((x,i)=>x.status==="fulfilled"?markets[i]:null).filter(Boolean)});
+  return json({artists,tracks,market:"CIS",fallback:!feeds.some(x=>x.status==="fulfilled"),markets:feeds.map((x,i)=>x.status==="fulfilled"?markets[i]:null).filter(Boolean)});
 }
 async function buildWave(request, env) {
   let seeds=[];
@@ -207,8 +207,31 @@ async function verifyDownload(source, id, env) {
   }
   return null;
 }
+async function accountApi(request, env) {
+  const user = await requireUser(request, env);
+  if (!user?.id) return json({ error: "Откройте KaylsMusic внутри Telegram" }, 401);
+  if (!env.USER_DATA) return json({ error: "Cloudflare KV не подключён. Создайте KV namespace и привяжите его как USER_DATA." }, 503);
+  const key = "user:" + String(user.id);
+  if (request.method === "GET") {
+    const data = await env.USER_DATA.get(key, "json");
+    return json({ ok: true, user: { id: String(user.id), first_name: user.first_name || "" }, data: data || { saved: [], history: [], disliked: [] } });
+  }
+  if (request.method === "PUT") {
+    let body;
+    try { body = await request.json(); } catch { return json({ error: "Некорректный JSON" }, 400); }
+    const clean = {};
+    for (const field of ["saved", "history", "disliked"]) {
+      clean[field] = Array.isArray(body[field]) ? body[field].slice(0, field === "history" ? 100 : 500) : [];
+    }
+    const encoded = JSON.stringify(clean);
+    if (encoded.length > 180000) return json({ error: "Слишком большой размер коллекции" }, 413);
+    await env.USER_DATA.put(key, encoded);
+    return json({ ok: true, updated: true });
+  }
+  return json({ error: "Method not allowed" }, 405);
+}
 async function handleApi(request, env, url) {
-  if (request.method === "GET" && url.pathname === "/api/discover") return discoverFeed(env);
+  if ((request.method === "GET" || request.method === "PUT") && url.pathname === "/api/me") return accountApi(request, env);\n  if (request.method === "GET" && url.pathname === "/api/discover") return discoverFeed(env);
   if (request.method === "GET" && url.pathname === "/api/wave") return buildWave(request, env);
   if (request.method === "GET" && url.pathname === "/api/search") {
     const q = (url.searchParams.get("q") || "").trim().slice(0, 120);
