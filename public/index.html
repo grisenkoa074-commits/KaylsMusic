@@ -10,10 +10,19 @@
 <div class="section-title"><h2>Недавно слушали</h2></div><div id="recentList" class="track-list"></div>
 </section>
 <section id="searchView" class="view" hidden><div class="page-heading"><h1>Поиск</h1><p>Находи любимую музыку</p></div><div class="searchbox"><span>⌕</span><input id="query2" placeholder="Трек, артист, альбом"><button id="searchButton2">Найти</button></div><div class="source-tabs"><button class="source active" data-source="all">Все</button><button class="source" data-source="Audius">Audius</button><button class="source" data-source="Jamendo">Jamendo</button><button class="source" data-source="Deezer">Deezer</button><button class="source" data-source="iTunes">iTunes</button></div><div class="section-title"><h2>Результаты</h2><span id="searchStatus" class="muted"></span></div><div id="searchResults" class="track-list"></div></section>
+<section id="yandexView" class="view" hidden>
+<div class="page-heading"><h1>Яндекс Музыка</h1><p>Ищи музыку в официальном каталоге и слушай через встроенный плеер Яндекса.</p></div>
+<div class="searchbox"><span>⌕</span><input id="yandexQuery" placeholder="Название трека или исполнителя" autocomplete="off"><button id="yandexSearch">Найти</button></div>
+<div class="yandex-help">Поиск откроется в Яндекс Музыке. Чтобы слушать здесь, скопируй ссылку на трек через «Поделиться» → «HTML-код» и вставь её ниже.</div>
+<div class="section-title"><h2>Открыть трек в Kayl`s Music</h2></div>
+<div class="searchbox"><span>♫</span><input id="yandexLink" placeholder="Вставь ссылку или iframe-код Яндекса" autocomplete="off"><button id="yandexLoad">Открыть</button></div>
+<div id="yandexStatus" class="yandex-help">Поддерживаются официальные ссылки для встраивания трека или альбома.</div>
+<div id="yandexEmbed" class="yandex-embed"><div class="hint">После вставки ссылки здесь появится официальный плеер Яндекс Музыки.</div></div>
+</section>
 <section id="waveView" class="view" hidden><div class="wave-hero"><div class="muted">ПЕРСОНАЛЬНЫЕ РЕКОМЕНДАЦИИ</div><h1>Моя волна <span>✦</span></h1><p>Подборка на основе твоих сохранений и прослушиваний.</p><button id="refreshWave">Обновить волну ↻</button></div><div class="section-title"><h2>Для тебя</h2></div><div id="waveResults" class="track-list"></div></section>
 <section id="libraryView" class="view" hidden><div class="page-heading"><h1>Моя коллекция</h1><p>Всё, что ты сохранил</p></div><div class="library-stats"><div><b id="savedCount">0</b><span>треков</span></div><div><b id="historyCount">0</b><span>прослушано</span></div></div><div id="accountStatus" class="account-status">Подключаем аккаунт Telegram…</div><div class="section-title"><h2>Любимые треки</h2><button id="playSaved" class="text-btn">▶ Слушать</button></div><div id="libraryResults" class="track-list"></div></section>
 <section id="adminPanel" class="admin-panel" hidden><div class="section-title"><h2>Панель владельца</h2><button id="adminClose" class="text-btn">Закрыть</button></div><div id="adminData"></div></section>
-<nav class="bottom-nav"><button class="nav-item active" data-view="homeView"><span>⌂</span>Главная</button><button class="nav-item" data-view="waveView"><span>✦</span>Моя волна</button><button class="nav-item" data-view="libraryView"><span>♫</span>Коллекция</button></nav>
+<nav class="bottom-nav"><button class="nav-item active" data-view="homeView"><span>⌂</span>Главная</button><button class="nav-item" data-view="yandexView"><span>Я</span>Яндекс</button><button class="nav-item" data-view="waveView"><span>✦</span>Моя волна</button><button class="nav-item" data-view="libraryView"><span>♫</span>Коллекция</button></nav>
 </main>
 <div id="player" class="player" hidden>
 <div class="mini-progress"><span id="progressBar"></span></div>
