@@ -317,7 +317,7 @@ async function handleApi(request, env, url) {
   if (request.method === "GET" && url.pathname === "/api/search") {
     const q = (url.searchParams.get("q") || "").trim().slice(0, 120);
     if (q.length < 2) return json({ tracks: [], sources: {} });
-    try { return json(await searchAll(q, env)); }
+    try { const found = await searchAll(q, env); const full = (found.tracks || []).filter(t => ["Audius", "Jamendo"].includes(t.source) && t.stream); return json({ ...found, tracks: full }); }
     catch (e) { console.error("Search error", e); return json({ error: "Search services temporarily unavailable" }, 502); }
   }
   if (request.method === "GET" && url.pathname === "/api/audio") {
