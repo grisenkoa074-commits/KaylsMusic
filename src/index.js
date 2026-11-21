@@ -119,6 +119,30 @@ async function searchAll(query, env) {
   });
   return { tracks: unique.slice(0, 28), sources };
 }
+async function discoverFeed(env) {
+  const feedUrl="https://itunes.apple.com/ru/rss/topsongs/limit=40/json";
+  const feedResponse=await fetch(feedUrl,{headers:{"accept":"application/json"},signal:AbortSignal.timeout(10000)});
+  if(!feedResponse.ok)throw new Error("Charts unavailable");
+  const feed=await feedResponse.json();
+  const entries=feed.feed?.entry||[];
+  const chartSeeds=entries.map(e=>({artist:e["im:artist"]?.label||"",title:e["im:name"]?.label||"",picture:(e["im:image"]||[]).slice(-1)[0]?.label||""})).filter(x=>x.artist&&x.title);
+  const artistNames=[...new Set(chartSeeds.map(x=>x.artist))].slice(0,12);
+  const artistResults=await Promise.allSettled(artistNames.map(async name=>{
+    const u=new URL("https://api.deezer.com/search/artist");u.searchParams.set("q",name);u.searchParams.set("limit","1");
+    const r=await fetch(u,{signal:AbortSignal.timeout(8000)});if(!r.ok)return {name,picture:""};
+    const d=await r.json();const a=d.data?.[0];return {name:a?.name||name,picture:a?.picture_medium||""};
+  }));
+  const artists=artistResults.filter(x=>x.status==="fulfilled").map(x=>x.value).slice(0,12);
+  const queries=[...new Set(chartSeeds.slice(0,7).map(x=>x.artist))].slice(0,7);
+  const batches=await Promise.allSettled(queries.map(q=>searchAll(q,env)));
+  const all=[];for(const b of batches)if(b.status==="fulfilled")all.push(...b.value.tracks);
+  const seedArtists=new Set(queries.map(x=>x.toLowerCase()));
+  const seen=new Set();
+  const tracks=all.filter(t=>t.stream).map(t=>({...t,_rank:(seedArtists.has((t.artist||"").toLowerCase())?100:0)+(t.source==="Audius"?5:0)}))
+    .filter(t=>{const k=(t.title+"|"+t.artist).toLowerCase();if(seen.has(k))return false;seen.add(k);return true})
+    .sort((a,b)=>b._rank-a._rank).slice(0,30).map(({_rank,...t})=>t);
+  return json({artists,tracks,market:"RU"});
+}
 async function buildWave(request, env) {
   let seeds=[];
   try { seeds=JSON.parse(new URL(request.url).searchParams.get("seeds")||"[]"); } catch {}
@@ -180,6 +204,7 @@ async function verifyDownload(source, id, env) {
   return null;
 }
 async function handleApi(request, env, url) {
+  if (request.method === "GET" && url.pathname === "/api/discover") return discoverFeed(env);
   if (request.method === "GET" && url.pathname === "/api/wave") return buildWave(request, env);
   if (request.method === "GET" && url.pathname === "/api/search") {
     const q = (url.searchParams.get("q") || "").trim().slice(0, 120);
