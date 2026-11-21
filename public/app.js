@@ -11,8 +11,10 @@ function scheduleCloudSave(){clearTimeout(cloudTimer);cloudTimer=setTimeout(asyn
 function setAccountStatus(value){const el=$("accountStatus");if(el)el.textContent=value;}
 async function loadAccount(){if(!initData){setAccountStatus("Открой приложение через Telegram для синхронизации.");return;}try{const r=await fetch("/api/me",{headers:{"x-telegram-init-data":initData}}),d=await r.json();if(!r.ok){setAccountStatus(r.status===503?"Нужно подключить Cloudflare KV для синхронизации.":"Не удалось подтвердить аккаунт Telegram.");return;}const localSaved=saved,localHistory=history;saved=Array.isArray(d.data?.saved)?d.data.saved:[];saved=[...saved,...localSaved.filter(t=>!saved.some(x=>key(x)===key(t)))];history=Array.isArray(d.data?.history)?d.data.history:[];history=[...history,...localHistory.filter(t=>!history.some(x=>key(x)===key(t)))].slice(0,100);disliked=Array.isArray(d.data?.disliked)?d.data.disliked:[];cloudReady=true;persist(false);scheduleCloudSave();renderRecent();if(!$("libraryView").hidden)render($("libraryResults"),saved);setAccountStatus("Синхронизация включена · "+(d.user?.first_name||"Telegram"));}catch{setAccountStatus("Нет связи с сервером синхронизации.");}}
 
-function openYandexCatalog(){
- const q=$("yandexQuery").value.trim();
+function openYandexCatalog(query){
+ const q=String(query??$("yandexQuery")?.value??$("query")?.value??$("query2")?.value??"").trim();
+ if(!q){$("query")?.focus();return;}
+ if($("yandexQuery"))$("yandexQuery").value=q;
  const url="https://music.yandex.ru/search?text="+encodeURIComponent(q);
  if(tg?.openLink)tg.openLink(url);else window.open(url,"_blank","noopener");
 }
@@ -51,8 +53,8 @@ function loadYandexEmbed(){
   status.textContent="Плеер загружен с music.yandex.ru. Управление и воспроизведение выполняет Яндекс.";
  }catch(e){status.textContent=e.message;}
 }
-$("yandexSearch").onclick=openYandexCatalog;
-$("yandexQuery").onkeydown=e=>{if(e.key==="Enter")openYandexCatalog()};
+$("yandexSearch").onclick=()=>openYandexCatalog($("yandexQuery").value);
+$("yandexQuery").onkeydown=e=>{if(e.key==="Enter")openYandexCatalog($("yandexQuery").value)};
 $("yandexLoad").onclick=loadYandexEmbed;
 $("yandexLink").onkeydown=e=>{if(e.key==="Enter")loadYandexEmbed()};
 
@@ -77,21 +79,16 @@ function filtered(){return activeSource==="all"?results:results.filter(t=>t.sour
 let searchController=null;
 async function search(q,target){
  if(!q||q.trim().length<2)return;
- if(searchController)searchController.abort();
- const controller=new AbortController();searchController=controller;
- target.innerHTML='<div class="hint">Ищем музыку…</div>';
- try{const r=await fetch("/api/search?q="+encodeURIComponent(q.trim()),{signal:controller.signal}),d=await r.json();if(!r.ok)throw Error(d.error||"Ошибка поиска");if(controller.signal.aborted)return;results=d.tracks||[];render(target,results)}
- catch(e){if(e.name==="AbortError")return;target.innerHTML='<div class="hint">'+esc(e.message)+'</div>'}
+ openYandexCatalog(q);
+ if(target)target.innerHTML='<div class="hint">Открываем результаты поиска. После выбора трека используй «Поделиться» → «HTML-код», чтобы добавить официальный плеер сюда.</div>';
 }
 $("openSearch").onclick=()=>{$("searchPanel").hidden=false;$("query").focus();$("searchPanel").scrollIntoView({behavior:"smooth",block:"start"})};
 $("closeSearch").onclick=()=>{$("searchPanel").hidden=true;$("query").value="";$("homeResults").innerHTML='<div class="hint">Введи название трека или исполнителя.</div>'};
 let searchDebounce=null,searchSequence=0;
 function liveSearch(value,target){
- clearTimeout(searchDebounce);
+ clearTimeout(searchDebounce);searchSequence++;
  const q=value.trim();
- if(q.length<2){target.innerHTML='<div class="hint">Введи хотя бы 2 символа для поиска.</div>';return;}
- const seq=++searchSequence;
- searchDebounce=setTimeout(async()=>{if(seq!==searchSequence)return;target.innerHTML='<div class="hint">Ищем «'+esc(q)+'»…</div>';await search(q,target);},280);
+ target.innerHTML=q.length<2?'<div class="hint">Введи хотя бы 2 символа для поиска.</div>':'<div class="hint">Нажми Enter или кнопку поиска, чтобы открыть результаты.</div>';
 }
 $("query").oninput=e=>liveSearch(e.target.value,$("homeResults"));
 $("query").onkeydown=e=>{if(e.key==="Enter"){clearTimeout(searchDebounce);searchSequence++;search(e.target.value,$("homeResults"));}};
