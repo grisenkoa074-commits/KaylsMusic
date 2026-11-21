@@ -252,7 +252,7 @@ async function botAvatarApi(env) {
     if (!file.file_path) return new Response(null,{status:404});
     const image = await fetch(TELEGRAM_API+"/file/bot"+env.BOT_TOKEN+"/"+file.file_path);
     if (!image.ok) return new Response(null,{status:404});
-    return new Response(image.body,{headers:{"content-type":image.headers.get("content-type")||"image/jpeg","cache-control":"public, max-age=60"}});
+    return new Response(image.body,{headers:{"content-type":image.headers.get("content-type")||"image/jpeg","cache-control":"public, max-age=604800"}});
   } catch { return new Response(null,{status:404}); }
 }
 async function sendLicensedAudio(request,env) {
