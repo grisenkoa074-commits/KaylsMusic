@@ -28,11 +28,14 @@ function toggleSaved(t){saved=has(t)?saved.filter(x=>key(x)!==key(t)):[t,...save
 function refreshVisible(){if(!$("libraryView").hidden)render($("libraryResults"),saved);if(current)$("playerHeart").textContent=has(current)?"♥":"♡"}
 function renderRecent(){render($("recentList"),history.slice(0,5))}
 function filtered(){return activeSource==="all"?results:results.filter(t=>t.source===activeSource)}
+let searchController=null;
 async function search(q,target){
  if(!q||q.trim().length<2)return;
+ if(searchController)searchController.abort();
+ const controller=new AbortController();searchController=controller;
  target.innerHTML='<div class="hint">Ищем музыку…</div>';
- try{const r=await fetch("/api/search?q="+encodeURIComponent(q.trim())),d=await r.json();if(!r.ok)throw Error(d.error||"Ошибка поиска");results=d.tracks||[];render(target,results)}
- catch(e){target.innerHTML='<div class="hint">'+esc(e.message)+'</div>'}
+ try{const r=await fetch("/api/search?q="+encodeURIComponent(q.trim()),{signal:controller.signal}),d=await r.json();if(!r.ok)throw Error(d.error||"Ошибка поиска");if(controller.signal.aborted)return;results=d.tracks||[];render(target,results)}
+ catch(e){if(e.name==="AbortError")return;target.innerHTML='<div class="hint">'+esc(e.message)+'</div>'}
 }
 $("openSearch").onclick=()=>{$("searchPanel").hidden=false;$("query").focus();$("searchPanel").scrollIntoView({behavior:"smooth",block:"start"})};
 $("closeSearch").onclick=()=>{$("searchPanel").hidden=true;$("query").value="";$("homeResults").innerHTML='<div class="hint">Введи название трека или исполнителя.</div>'};
