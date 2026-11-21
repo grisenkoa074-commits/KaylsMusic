@@ -231,7 +231,8 @@ async function accountApi(request, env) {
   return json({ error: "Method not allowed" }, 405);
 }
 async function handleApi(request, env, url) {
-  if ((request.method === "GET" || request.method === "PUT") && url.pathname === "/api/me") return accountApi(request, env);\n  if (request.method === "GET" && url.pathname === "/api/discover") return discoverFeed(env);
+  if ((request.method === "GET" || request.method === "PUT") && url.pathname === "/api/me") return accountApi(request, env);
+  if (request.method === "GET" && url.pathname === "/api/discover") return discoverFeed(env);
   if (request.method === "GET" && url.pathname === "/api/wave") return buildWave(request, env);
   if (request.method === "GET" && url.pathname === "/api/search") {
     const q = (url.searchParams.get("q") || "").trim().slice(0, 120);
