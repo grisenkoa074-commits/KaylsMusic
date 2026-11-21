@@ -1,6 +1,7 @@
 const tg=window.Telegram?.WebApp;tg?.ready();tg?.expand();tg?.setHeaderColor?.("#111114");tg?.setBackgroundColor?.("#111114");
 const $=id=>document.getElementById(id),initData=tg?.initData||"",audio=$("audio");
-const K="kaylsmusic.collection.v1",H="kaylsmusic.history.v1";
+const K="kaylsmusic.collection.v1",H="kaylsmusic.history.v1",V="kaylsmusic.volume.v1";
+const initialVolume=Number(localStorage.getItem(V));audio.volume=Number.isFinite(initialVolume)&&localStorage.getItem(V)!==null?Math.max(0,Math.min(1,initialVolume)):.8;
 function read(k){try{return JSON.parse(localStorage.getItem(k)||"[]")}catch{return []}}
 let saved=read(K),history=read(H),disliked=[],results=[],queue=[],qi=-1,activeSource="all",current=null,repeatOne=false,cloudReady=false,cloudTimer=null,sleepTimer=null;
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
@@ -59,6 +60,7 @@ $("timerButton").onclick=()=>{const mins=Number(prompt("Остановить м�
 $("downloadButton").onclick=()=>{if(!current)return;if(!current.downloadable){tg?.showAlert?.("Для этого трека скачивание недоступно.");return}location.href="/api/download?source="+encodeURIComponent(current.source.toLowerCase())+"&id="+encodeURIComponent(current.id)};
 $("startWave").onclick=()=>{if(current){saved=[current,...saved.filter(t=>key(t)!==key(current))];persist()}closeFullPlayer();switchView("waveView")};
 $("seekBar").oninput=e=>{if(Number.isFinite(audio.duration))audio.currentTime=audio.duration*(Number(e.target.value)/1000)};
+$("volumeControl").value=Math.round(audio.volume*100);$("volumeValue").textContent=Math.round(audio.volume*100)+"%";$("volumeControl").oninput=e=>{const v=Math.max(0,Math.min(1,Number(e.target.value)/100));audio.volume=v;localStorage.setItem(V,String(v));$("volumeValue").textContent=Math.round(v*100)+"%";$("volumeIcon").textContent=v===0?"🔇":v<.5?"🔉":"🔊"};
 function next(){if(repeatOne&&current){play(current,queue);return}if(qi+1<queue.length)play(queue[++qi],queue);else setPlaying(false)}function prev(){if(audio.currentTime>3){audio.currentTime=0;return}if(qi>0)play(queue[--qi],queue)}
 $("nextTrack").onclick=next;audio.onended=next;$("playerHeart").onclick=()=>current&&toggleSaved(current);
 audio.ontimeupdate=()=>{if(audio.duration){const p=audio.currentTime/audio.duration*100;$("progressBar").style.width=p+"%";$("seekBar").value=Math.round(p*10);$("elapsedTime").textContent=fmtTime(audio.currentTime);$("totalTime").textContent="-"+fmtTime(audio.duration-audio.currentTime)}};audio.onplay=()=>setPlaying(true);audio.onpause=()=>setPlaying(false);
