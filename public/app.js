@@ -36,7 +36,7 @@ async function makeWave(){
   waveLoading=true;target.innerHTML='<div class="hint">Подбираем похожих исполнителей и музыку по твоим вкусам…</div>';
   try{
     const params=new URLSearchParams();
-    params.set("seeds",JSON.stringify(seeds.map(t=>({artist:t.artist,title:t.title,source:t.source,id:t.id}))));
+    params.set("seeds",JSON.stringify(seeds.map(t=>({artist:t.artist,title:t.title,source:t.source,id:t.id,genres:t.genres||[],tags:t.tags||[],mood:t.mood||""}))));
     const r=await fetch("/api/wave?"+params.toString());const d=await r.json();
     if(!r.ok)throw Error(d.error||"Не удалось собрать волну");
     waveTracks=d.tracks||[];
