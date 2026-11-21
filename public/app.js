@@ -28,7 +28,24 @@ function next(){if(qi+1<queue.length)play(queue[++qi],queue);else $("playPause")
 $("nextTrack").onclick=next;$("prevTrack").onclick=prev;audio.onended=next;$("playerHeart").onclick=()=>current&&toggleSaved(current);
 audio.ontimeupdate=()=>{if(audio.duration)$("progressBar").style.width=(audio.currentTime/audio.duration*100)+"%"};
 function share(t){const u=new URL("/",location.origin);u.searchParams.set("track",JSON.stringify({id:t.id,source:t.source,title:t.title,artist:t.artist,artwork:t.artwork,stream:t.stream}));const url="https://t.me/share/url?url="+encodeURIComponent(u.href)+"&text="+encodeURIComponent(t.title+" — "+t.artist);if(tg?.openTelegramLink)tg.openTelegramLink(url);else if(navigator.share)navigator.share({title:t.title,url:u.href}).catch(()=>{});else navigator.clipboard?.writeText(u.href)}
-async function makeWave(){const target=$("waveResults"),seeds=[...saved,...history].slice(0,6);if(!seeds.length){target.innerHTML='<div class="hint">Добавь несколько любимых треков — и волна начнёт подбирать похожую музыку.</div>';return}target.innerHTML='<div class="hint">Настраиваем волну…</div>';const seed=seeds[Math.floor(Math.random()*Math.min(3,seeds.length))];const d=await fetch("/api/search?q="+encodeURIComponent(seed.artist||seed.title)).then(r=>r.json()).catch(()=>({tracks:[]}));const seen=new Set(seeds.map(key));const picks=(d.tracks||[]).filter(t=>t.stream&&!seen.has(key(t)));render(target,picks.slice(0,20));}
+let waveTracks=[],waveLoading=false;
+async function makeWave(){
+  const target=$("waveResults"),seeds=[...saved,...history].filter((t,i,arr)=>arr.findIndex(x=>key(x)===key(t))===i).slice(0,12);
+  if(!seeds.length){target.innerHTML='<div class="hint">Сначала сохрани ❤️ или послушай несколько треков. По ним KaylsMusic соберёт твою волну.</div>';return}
+  if(waveLoading)return;
+  waveLoading=true;target.innerHTML='<div class="hint">Подбираем похожих исполнителей и музыку по твоим вкусам…</div>';
+  try{
+    const params=new URLSearchParams();
+    params.set("seeds",JSON.stringify(seeds.map(t=>({artist:t.artist,title:t.title,source:t.source,id:t.id}))));
+    const r=await fetch("/api/wave?"+params.toString());const d=await r.json();
+    if(!r.ok)throw Error(d.error||"Не удалось собрать волну");
+    waveTracks=d.tracks||[];
+    if(!waveTracks.length){target.innerHTML='<div class="hint">Пока мало похожих треков. Сохрани ещё несколько песен разных исполнителей и обнови волну.</div>';return}
+    render(target,waveTracks);
+    $("searchStatus").textContent=waveTracks.length+" треков в твоей волне";
+  }catch(e){target.innerHTML='<div class="hint">'+esc(e.message)+'</div>'}
+  finally{waveLoading=false}
+}
 $("refreshWave").onclick=makeWave;$("playSaved").onclick=()=>saved.length&&play(saved[0],saved);
 function shared(){const raw=new URL(location.href).searchParams.get("track");if(!raw)return;try{const t=JSON.parse(raw);if(t.title&&t.stream){switchView("homeView");render($("homeResults"),[t]);}}catch{}}
 $("adminOpen").onclick=async()=>{try{const r=await fetch("/api/admin",{headers:{"x-telegram-init-data":initData}}),d=await r.json();if(!r.ok)throw Error();$("adminPanel").hidden=false;$("adminData").textContent=JSON.stringify(d.admin||d,null,2)}catch{tg?.showAlert?.("Доступ закрыт")}};$("adminClose").onclick=()=>$("adminPanel").hidden=true;
