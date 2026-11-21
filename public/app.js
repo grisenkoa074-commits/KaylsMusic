@@ -6,7 +6,12 @@ let saved=read(K),history=read(H),results=[],queue=[],qi=-1,activeSource="all",c
 const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 const key=t=>t.source+"|"+t.id,has=t=>saved.some(x=>key(x)===key(t));
 function persist(){localStorage.setItem(K,JSON.stringify(saved));localStorage.setItem(H,JSON.stringify(history.slice(0,50)));$("savedCount").textContent=saved.length;$("historyCount").textContent=history.length;}
-function switchView(id){document.querySelectorAll(".view").forEach(v=>v.hidden=v.id!==id);document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view===id));$("adminPanel").hidden=true;if(id==="libraryView")render($("libraryResults"),saved);if(id==="waveView")makeWave();if(id==="homeView")renderRecent();}
+function switchView(id){
+ const views=[...document.querySelectorAll(".view")];views.forEach(v=>{v.hidden=v.id!==id;v.classList.remove("view-enter")});
+ document.querySelectorAll(".nav-item").forEach(b=>b.classList.toggle("active",b.dataset.view===id));$("adminPanel").hidden=true;
+ const active=$(id);if(active){void active.offsetWidth;active.classList.add("view-enter")}
+ if(id==="libraryView")render($("libraryResults"),saved);if(id==="waveView")makeWave();if(id==="homeView")renderRecent();
+}
 document.querySelectorAll(".nav-item").forEach(b=>b.onclick=()=>switchView(b.dataset.view));
 document.querySelectorAll("[data-goto]").forEach(b=>b.onclick=()=>switchView(b.dataset.goto));$("waveShortcut").onclick=()=>switchView("waveView");
 function render(target,tracks){if(!tracks.length){target.innerHTML='<div class="hint">Здесь пока пусто. Найди музыку и нажми ♡, чтобы сохранить.</div>';return}
@@ -16,12 +21,19 @@ target.querySelectorAll("[data-heart]").forEach(b=>b.onclick=()=>toggleSaved(tra
 target.querySelectorAll("[data-share]").forEach(b=>b.onclick=()=>share(tracks[+b.dataset.share]));
 }
 function toggleSaved(t){saved=has(t)?saved.filter(x=>key(x)!==key(t)):[t,...saved];persist();refreshVisible();tg?.HapticFeedback?.impactOccurred?.("light")}
-function refreshVisible(){if(!$("libraryView").hidden)render($("libraryResults"),saved);if(!$("searchView").hidden)render($("searchResults"),filtered());if(!$("homeView").hidden)render($("homeResults"),results);if(current)$("playerHeart").textContent=has(current)?"♥":"♡"}
+function refreshVisible(){if(!$("libraryView").hidden)render($("libraryResults"),saved);if(current)$("playerHeart").textContent=has(current)?"♥":"♡"}
 function renderRecent(){render($("recentList"),history.slice(0,5))}
 function filtered(){return activeSource==="all"?results:results.filter(t=>t.source===activeSource)}
-async function search(q,target){if(!q||q.trim().length<2)return;target.innerHTML='<div class="hint">Ищем музыку…</div>';try{const r=await fetch("/api/search?q="+encodeURIComponent(q.trim())),d=await r.json();if(!r.ok)throw Error(d.error||"Ошибка поиска");results=d.tracks||[];render(target,target===$("searchResults")?filtered():results);$("searchStatus").textContent=results.length+" треков"}catch(e){target.innerHTML='<div class="hint">'+esc(e.message)+'</div>'}}
-$("searchButton").onclick=()=>search($("query").value,$("homeResults"));$("query").onkeydown=e=>{if(e.key==="Enter")search(e.target.value,$("homeResults"))};$("searchButton2").onclick=()=>search($("query2").value,$("searchResults"));$("query2").onkeydown=e=>{if(e.key==="Enter")search(e.target.value,$("searchResults"))};
-document.querySelectorAll("[data-source]").forEach(b=>b.onclick=()=>{activeSource=b.dataset.source;document.querySelectorAll("[data-source]").forEach(x=>x.classList.toggle("active",x===b));render($("searchResults"),filtered())});
+async function search(q,target){
+ if(!q||q.trim().length<2)return;
+ target.innerHTML='<div class="hint">Ищем музыку…</div>';
+ try{const r=await fetch("/api/search?q="+encodeURIComponent(q.trim())),d=await r.json();if(!r.ok)throw Error(d.error||"Ошибка поиска");results=d.tracks||[];render(target,results)}
+ catch(e){target.innerHTML='<div class="hint">'+esc(e.message)+'</div>'}
+}
+$("openSearch").onclick=()=>{$("searchPanel").hidden=false;$("query").focus();$("searchPanel").scrollIntoView({behavior:"smooth",block:"start"})};
+$("closeSearch").onclick=()=>{$("searchPanel").hidden=true;$("query").value="";$("homeResults").innerHTML='<div class="hint">Введи название трека или исполнителя.</div>'};
+$("query").oninput=e=>{if(e.target.value.trim().length>=2)search(e.target.value,$("homeResults"))};
+$("query").onkeydown=e=>{if(e.key==="Enter")search(e.target.value,$("homeResults"))};
 async function play(t,list){if(!t.stream){tg?.showAlert?.("Для этого трека нет доступного предпрослушивания.");return}queue=list||queue;qi=queue.findIndex(x=>key(x)===key(t));current=t;$("playerTitle").textContent=t.title;$("playerArtist").textContent=t.artist;$("playerArt").src=t.artwork||"";$("playerHeart").textContent=has(t)?"♥":"♡";$("player").hidden=false;audio.src=t.stream;try{await audio.play();$("playPause").textContent="Ⅱ"}catch{$("playPause").textContent="▶"}history=[t,...history.filter(x=>key(x)!==key(t))].slice(0,50);persist();renderRecent()}
 $("playPause").onclick=async()=>{if(audio.paused){try{await audio.play();$("playPause").textContent="Ⅱ"}catch{}}else{audio.pause();$("playPause").textContent="▶"}};
 function next(){if(qi+1<queue.length)play(queue[++qi],queue);else $("playPause").textContent="▶"}function prev(){if(audio.currentTime>3){audio.currentTime=0;return}if(qi>0)play(queue[--qi],queue)}
@@ -50,4 +62,4 @@ $("refreshWave").onclick=makeWave;$("playSaved").onclick=()=>saved.length&&play(
 function shared(){const raw=new URL(location.href).searchParams.get("track");if(!raw)return;try{const t=JSON.parse(raw);if(t.title&&t.stream){switchView("homeView");render($("homeResults"),[t]);}}catch{}}
 $("adminOpen").onclick=async()=>{try{const r=await fetch("/api/admin",{headers:{"x-telegram-init-data":initData}}),d=await r.json();if(!r.ok)throw Error();$("adminPanel").hidden=false;$("adminData").textContent=JSON.stringify(d.admin||d,null,2)}catch{tg?.showAlert?.("Доступ закрыт")}};$("adminClose").onclick=()=>$("adminPanel").hidden=true;
 if(initData)fetch("/api/admin",{headers:{"x-telegram-init-data":initData}}).then(r=>{if(r.ok)$("adminOpen").hidden=false}).catch(()=>{});
-persist();renderRecent();shared();
+persist();renderRecent();loadDiscover();shared();
